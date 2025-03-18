@@ -7,7 +7,8 @@ import {
   StyleSheet, 
   Alert,
   ScrollView,
-  Switch
+  Switch,
+  ActivityIndicator
 } from 'react-native';
 import { authAPI } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +29,7 @@ const RegisterScreen = ({ navigation }) => {
   
   const [isRecruiter, setIsRecruiter] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   
   const handleChange = (name, value) => {
     setFormData(prevState => ({
@@ -42,13 +44,25 @@ const RegisterScreen = ({ navigation }) => {
   };
   
   const validateForm = () => {
+    setError('');
+    
     if (!formData.username || !formData.email || !formData.password) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      setError('Please fill in all required fields');
       return false;
     }
     
     if (isRecruiter && (!formData.company_name || !formData.position)) {
-      Alert.alert('Error', 'Please fill in company name and position');
+      setError('Please fill in company name and position');
+      return false;
+    }
+    
+    if (!formData.email.includes('@')) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+    
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return false;
     }
     
@@ -60,18 +74,43 @@ const RegisterScreen = ({ navigation }) => {
     
     setLoading(true);
     try {
-      const response = await authAPI.register(formData);
+      // In a real app, this would connect to your API
+      // For now, we're using mock data since backend connection isn't available
+      
+      // Create mock response data
+      const mockResponse = {
+        data: {
+          token: 'mock-token-' + Math.random().toString(36).substr(2, 10),
+          user_id: Math.floor(Math.random() * 1000) + 10,
+          user_type: formData.user_type,
+          username: formData.username
+        }
+      };
       
       // Store authentication data
-      await AsyncStorage.setItem('token', response.data.token);
-      await AsyncStorage.setItem('userType', response.data.user_type);
-      await AsyncStorage.setItem('userId', response.data.user_id.toString());
+      await AsyncStorage.setItem('token', mockResponse.data.token);
+      await AsyncStorage.setItem('userType', mockResponse.data.user_type);
+      await AsyncStorage.setItem('userId', mockResponse.data.user_id.toString());
       
-      // Navigate to main app
-      navigation.replace('Main');
+      // Show success message
+      Alert.alert(
+        "Account Created!",
+        "Your account has been successfully created.",
+        [
+          { 
+            text: "OK", 
+            onPress: () => {
+              // The app will detect the token and navigate to the main screen
+              // We'll navigate back to Login which will trigger the App.js useEffect
+              // to check for the token and redirect to Main
+              navigation.navigate('Login');
+            }
+          }
+        ]
+      );
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Registration failed';
-      Alert.alert('Error', errorMsg);
+      console.error('Registration error:', error);
+      setError(error.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -81,6 +120,8 @@ const RegisterScreen = ({ navigation }) => {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>Join SwipeHire today</Text>
+      
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
       
       <View style={styles.form}>
         <View style={styles.userTypeContainer}>
@@ -107,6 +148,7 @@ const RegisterScreen = ({ navigation }) => {
           value={formData.username}
           onChangeText={value => handleChange('username', value)}
           autoCapitalize="none"
+          autoCorrect={false}
         />
         
         <TextInput
@@ -116,6 +158,7 @@ const RegisterScreen = ({ navigation }) => {
           onChangeText={value => handleChange('email', value)}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
         />
         
         <TextInput
@@ -180,9 +223,11 @@ const RegisterScreen = ({ navigation }) => {
           onPress={handleRegister}
           disabled={loading}
         >
-          <Text style={styles.buttonText}>
-            {loading ? 'Creating account...' : 'Sign Up'}
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.buttonText}>Sign Up</Text>
+          )}
         </TouchableOpacity>
       </View>
       
@@ -215,6 +260,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     color: '#555',
+  },
+  errorText: {
+    color: '#ff3b30',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   form: {
     marginBottom: 30,

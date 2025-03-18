@@ -1,16 +1,20 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// Change this to your machine's IP when testing on physical device
-export const API_URL = 'http://172.20.10.2:8000/api';
-
+// Enable mock data by default to make development easier
 const MOCK_AUTH_ENABLED = true;
+
+// Use a consistent localhost URL - this won't connect on physical devices but mock data will work
+export const API_URL = 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add a timeout to prevent long waits on failed connections
+  timeout: 5000
 });
 
 // Add a request interceptor to include the token in all requests
@@ -26,7 +30,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-
 
 const mockAuth = {
   login: async (username, password) => {
@@ -70,8 +73,20 @@ export const authAPI = {
     }
     return api.post('/users/login/', { username, password });
   },
-  login: (username, password) => api.post('/users/login/', { username, password }),
-  register: (userData) => api.post('/users/register/', userData),
+  register: (userData) => {
+    if (MOCK_AUTH_ENABLED) {
+      // Mock successful registration
+      return Promise.resolve({
+        data: {
+          token: 'mock-token-for-registration',
+          user_id: 999,
+          user_type: userData.user_type,
+          username: userData.username
+        }
+      });
+    }
+    return api.post('/users/register/', userData);
+  },
   getProfile: () => api.get('/users/profiles/'),
 };
 
@@ -88,7 +103,5 @@ export const matchingAPI = {
   getMessages: (matchId) => api.get(`/matching/messages/?match_id=${matchId}`),
   sendMessage: (messageData) => api.post('/matching/messages/', messageData),
 };
-
-
 
 export default api;

@@ -84,6 +84,7 @@ const ProfileScreen = ({ navigation }) => {
     fetchProfileData();
   }, []);
   
+    
   const handleLogout = async () => {
     Alert.alert(
       'Logout',
@@ -98,10 +99,8 @@ const ProfileScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await AsyncStorage.multiRemove(['token', 'userType', 'userId']);
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Auth' }],
-              });
+              // Use navigation.replace instead of reset
+              navigation.replace('Auth');
             } catch (error) {
               console.error('Error during logout:', error);
             }

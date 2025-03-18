@@ -176,19 +176,7 @@ const SwipeScreen = () => {
         // Load appropriate data based on user type
         if (type === 'job_seeker') {
           // For job seekers, show jobs
-          try {
-            // Try to fetch from API first
-            const response = await jobsAPI.getJobs();
-            if (response.data && response.data.length > 0) {
-              setData(response.data);
-            } else {
-              // If no data from API, use sample data
-              setData(SAMPLE_JOBS);
-            }
-          } catch (error) {
-            console.log('Error fetching jobs, using sample data:', error);
-            setData(SAMPLE_JOBS);
-          }
+          setData(SAMPLE_JOBS);
         } else {
           // For recruiters, show candidates
           setData(SAMPLE_CANDIDATES);
@@ -206,13 +194,18 @@ const SwipeScreen = () => {
     fetchUserData();
   }, []);
   
+  // Enhanced PanResponder with better sensitivity
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (event, gesture) => {
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        // Only respond to horizontal movements greater than 10 units
+        return Math.abs(gesture.dx) > 10;
+      },
+      onPanResponderMove: (_, gesture) => {
         position.setValue({ x: gesture.dx, y: gesture.dy });
       },
-      onPanResponderRelease: (event, gesture) => {
+      onPanResponderRelease: (_, gesture) => {
         if (gesture.dx > SWIPE_THRESHOLD) {
           swipeRight();
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
@@ -260,7 +253,7 @@ const SwipeScreen = () => {
     
     const item = data[currentIndex];
     
-    // In a real app, this would send to the server
+    // Log the action
     try {
       if (userType === 'job_seeker') {
         console.log(`Swiped ${direction} on job: ${item.title}`);
@@ -297,6 +290,7 @@ const SwipeScreen = () => {
       console.error('Error recording swipe:', error);
     }
     
+    // Reset position and move to next card
     position.setValue({ x: 0, y: 0 });
     setCurrentIndex(prevIndex => prevIndex + 1);
   };

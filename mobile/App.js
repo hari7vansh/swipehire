@@ -18,6 +18,15 @@ import CreateJobScreen from './src/screens/CreateJobScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+const AuthStack = createStackNavigator();
+
+// Auth stack component
+const AuthStackScreen = () => (
+  <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Screen name="Login" component={LoginScreen} />
+    <AuthStack.Screen name="Register" component={RegisterScreen} />
+  </AuthStack.Navigator>
+);
 
 // Main app tabs
 const MainTabs = () => (
@@ -43,34 +52,6 @@ const MainTabs = () => (
     <Tab.Screen name="Matches" component={MatchesScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
   </Tab.Navigator>
-);
-
-// Auth stack
-const AuthStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="Register" component={RegisterScreen} />
-  </Stack.Navigator>
-);
-
-// Main stack (includes tabs and other screens)
-const MainStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="MainTabs" component={MainTabs} />
-    <Stack.Screen 
-      name="Chat" 
-      component={ChatScreen} 
-      options={{ headerShown: true }}
-    />
-    <Stack.Screen 
-      name="CreateJob" 
-      component={CreateJobScreen} 
-      options={{ 
-        headerShown: true,
-        title: "Post New Job"
-      }}
-    />
-  </Stack.Navigator>
 );
 
 export default function App() {
@@ -119,24 +100,30 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!hasSeenOnboarding ? (
           // First-time users see onboarding
-          <Stack.Screen 
-            name="Onboarding" 
-            options={{ headerShown: false }}
-          >
+          <Stack.Screen name="Onboarding">
             {props => <OnboardingScreen {...props} completeOnboarding={completeOnboarding} />}
           </Stack.Screen>
         ) : !userToken ? (
           // Auth flow (not logged in)
-          <Stack.Screen 
-            name="Auth" 
-            component={AuthStack} 
-          />
+          <Stack.Screen name="Auth" component={AuthStackScreen} />
         ) : (
           // Main app flow (logged in)
-          <Stack.Screen 
-            name="Main" 
-            component={MainStack} 
-          />
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen 
+              name="Chat" 
+              component={ChatScreen} 
+              options={{ headerShown: true }}
+            />
+            <Stack.Screen 
+              name="CreateJob" 
+              component={CreateJobScreen} 
+              options={{ 
+                headerShown: true,
+                title: "Post New Job"
+              }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

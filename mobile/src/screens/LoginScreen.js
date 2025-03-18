@@ -44,7 +44,6 @@ const LoginScreen = ({ navigation }) => {
     if (!validateForm()) return;
   
     setLoading(true);
-    // In handleLogin function
     try {
       console.log('Attempting login with:', username);
       console.log('API URL:', API_URL);
@@ -58,17 +57,16 @@ const LoginScreen = ({ navigation }) => {
       await AsyncStorage.setItem('userId', response.data.user_id.toString());
       
       // Navigate to main app
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }]
-      });
+      navigation.replace('Main');
     } catch (error) {
       console.error('Login error:', error);
       // More specific error message based on error type
-      if (error.message && error.message.includes('timeout')) {
-        setError('Connection timeout. Using offline mode.');
-        // Auto-login for testing (remove in production)
-        if (username === 'recruiter' || username === 'jobseeker') {
+      if (!error.response && !error.request) {
+        // Network error
+        setError('Network error. Please check your connection and try again.');
+        
+        // For testing convenience in development
+        if (__DEV__ && (username === 'recruiter' || username === 'jobseeker')) {
           const mockUserType = username === 'recruiter' ? 'recruiter' : 'job_seeker';
           const mockUserId = username === 'recruiter' ? '1' : '2';
           const mockToken = username === 'recruiter' 
@@ -87,7 +85,7 @@ const LoginScreen = ({ navigation }) => {
       } else if (error.response?.data) {
         setError(error.response.data.error || 'Login failed. Please check your credentials.');
       } else {
-        setError('Network error. Please check your connection and try again.');
+        setError('Connection error. The server may be unavailable.');
       }
     } finally {
       setLoading(false);
