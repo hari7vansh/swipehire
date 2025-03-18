@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 const MOCK_AUTH_ENABLED = true;
 
 // Use a consistent localhost URL - this won't connect on physical devices but mock data will work
-export const API_URL = 'http://localhost:8000/api';
+export const API_URL = 'http://10.36.63.63:8000/api';
 
 const api = axios.create({
   baseURL: API_URL,

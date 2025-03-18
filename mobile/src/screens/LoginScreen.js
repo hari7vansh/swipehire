@@ -51,13 +51,13 @@ const LoginScreen = ({ navigation }) => {
       const response = await authAPI.login(username, password);
       console.log('Login response:', response.data);
       
-      // Store auth data
+      // Just store auth data and App.js will handle navigation automatically
       await AsyncStorage.setItem('token', response.data.token);
       await AsyncStorage.setItem('userType', response.data.user_type);
       await AsyncStorage.setItem('userId', response.data.user_id.toString());
       
-      // Navigate to main app
-      navigation.replace('Main');
+      // The App.js useEffect will detect the token and handle navigation
+      setLoading(false);
     } catch (error) {
       console.error('Login error:', error);
       // More specific error message based on error type
@@ -76,18 +76,12 @@ const LoginScreen = ({ navigation }) => {
           await AsyncStorage.setItem('token', mockToken);
           await AsyncStorage.setItem('userType', mockUserType);
           await AsyncStorage.setItem('userId', mockUserId);
-          
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Main' }]
-          });
         }
       } else if (error.response?.data) {
         setError(error.response.data.error || 'Login failed. Please check your credentials.');
       } else {
         setError('Connection error. The server may be unavailable.');
       }
-    } finally {
       setLoading(false);
     }
   };

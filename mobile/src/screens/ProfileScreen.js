@@ -98,9 +98,8 @@ const ProfileScreen = ({ navigation }) => {
           text: 'Logout',
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove(['token', 'userType', 'userId']);
-              // Use navigation.replace instead of reset
-              navigation.replace('Auth');
+              // Just remove the token and App.js will handle navigation
+              await AsyncStorage.removeItem('token');
             } catch (error) {
               console.error('Error during logout:', error);
             }

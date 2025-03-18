@@ -84,7 +84,23 @@ export default function App() {
     };
 
     bootstrapAsync();
-  }, []);
+    
+    // Set up a token check interval to detect changes in AsyncStorage
+    const tokenCheckInterval = setInterval(async () => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (token !== userToken) {
+          setUserToken(token);
+        }
+      } catch (e) {
+        console.error('Error checking token:', e);
+      }
+    }, 1000);
+    
+    return () => {
+      clearInterval(tokenCheckInterval);
+    };
+  }, [userToken]);
 
   // Shows a loading screen while checking storage
   if (isLoading) {
