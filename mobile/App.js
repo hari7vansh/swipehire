@@ -3,8 +3,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Import screens
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -15,6 +16,9 @@ import MatchesScreen from './src/screens/MatchesScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import CreateJobScreen from './src/screens/CreateJobScreen';
+
+// Import theme
+import { COLORS } from './src/theme';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -37,15 +41,31 @@ const MainTabs = () => (
         if (route.name === 'Swipe') {
           iconName = focused ? 'albums' : 'albums-outline';
         } else if (route.name === 'Matches') {
-          iconName = focused ? 'heart' : 'heart-outline';
+          iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
         } else if (route.name === 'Profile') {
           iconName = focused ? 'person' : 'person-outline';
         }
         return <Ionicons name={iconName} size={size} color={color} />;
       },
-      tabBarActiveTintColor: '#ff6b6b',
-      tabBarInactiveTintColor: 'gray',
+      tabBarActiveTintColor: COLORS.primary,
+      tabBarInactiveTintColor: COLORS.textSecondary,
       headerShown: false,
+      tabBarStyle: {
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        height: 60,
+        paddingBottom: 5,
+        paddingTop: 5,
+      },
+      tabBarLabelStyle: {
+        fontSize: 12,
+        fontWeight: '500',
+      }
     })}
   >
     <Tab.Screen name="Swipe" component={SwipeScreen} />
@@ -58,6 +78,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [userToken, setUserToken] = useState(null);
+  const [appReady, setAppReady] = useState(false);
 
   // Function to complete onboarding
   const completeOnboarding = async () => {
@@ -79,7 +100,11 @@ export default function App() {
       } catch (e) {
         console.error('Error loading app state:', e);
       } finally {
-        setIsLoading(false);
+        // Add a slight delay to allow the splash screen to display
+        setTimeout(() => {
+          setIsLoading(false);
+          setAppReady(true);
+        }, 1500);
       }
     };
 
@@ -102,46 +127,63 @@ export default function App() {
     };
   }, [userToken]);
 
+  if (!appReady) {
+    return null; // Let the native splash screen handle initial loading
+  }
+
   // Shows a loading screen while checking storage
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#ff6b6b" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!hasSeenOnboarding ? (
-          // First-time users see onboarding
-          <Stack.Screen name="Onboarding">
-            {props => <OnboardingScreen {...props} completeOnboarding={completeOnboarding} />}
-          </Stack.Screen>
-        ) : !userToken ? (
-          // Auth flow (not logged in)
-          <Stack.Screen name="Auth" component={AuthStackScreen} />
-        ) : (
-          // Main app flow (logged in)
-          <>
-            <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen 
-              name="Chat" 
-              component={ChatScreen} 
-              options={{ headerShown: true }}
-            />
-            <Stack.Screen 
-              name="CreateJob" 
-              component={CreateJobScreen} 
-              options={{ 
-                headerShown: true,
-                title: "Post New Job"
-              }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!hasSeenOnboarding ? (
+            // First-time users see onboarding
+            <Stack.Screen name="Onboarding">
+              {props => <OnboardingScreen {...props} completeOnboarding={completeOnboarding} />}
+            </Stack.Screen>
+          ) : !userToken ? (
+            // Auth flow (not logged in)
+            <Stack.Screen name="Auth" component={AuthStackScreen} />
+          ) : (
+            // Main app flow (logged in)
+            <>
+              <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen 
+                name="Chat" 
+                component={ChatScreen} 
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="CreateJob" 
+                component={CreateJobScreen} 
+                options={{ 
+                  headerShown: true,
+                  headerStyle: {
+                    backgroundColor: COLORS.primary,
+                    elevation: 0,
+                    shadowOpacity: 0,
+                  },
+                  headerTitleStyle: {
+                    color: 'white',
+                    fontWeight: 'bold',
+                  },
+                  headerTintColor: 'white',
+                  title: "Post New Job"
+                }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

@@ -8,10 +8,15 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  SafeAreaView
+  SafeAreaView,
+  Platform,
+  StatusBar, // Added StatusBar import
+  Animated
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 
 // Sample profile data
 const SAMPLE_RECRUITER_PROFILE = {
@@ -58,6 +63,33 @@ const ProfileScreen = ({ navigation }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userType, setUserType] = useState('');
+  const [activeTab, setActiveTab] = useState('about');
+  const scrollY = new Animated.Value(0);
+  
+  // Animation values
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [200, 120],
+    extrapolate: 'clamp'
+  });
+  
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 80, 120],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp'
+  });
+  
+  const titleOpacity = scrollY.interpolate({
+    inputRange: [0, 80, 120],
+    outputRange: [0, 0.5, 1],
+    extrapolate: 'clamp'
+  });
+  
+  const titleSize = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [0, 20],
+    extrapolate: 'clamp'
+  });
   
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -84,7 +116,6 @@ const ProfileScreen = ({ navigation }) => {
     fetchProfileData();
   }, []);
   
-    
   const handleLogout = async () => {
     Alert.alert(
       'Logout',
@@ -96,9 +127,9 @@ const ProfileScreen = ({ navigation }) => {
         },
         {
           text: 'Logout',
+          style: 'destructive',
           onPress: async () => {
             try {
-              // Just remove the token and App.js will handle navigation
               await AsyncStorage.removeItem('token');
             } catch (error) {
               console.error('Error during logout:', error);
@@ -113,84 +144,132 @@ const ProfileScreen = ({ navigation }) => {
     return `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`;
   };
   
-  const RecruiterProfile = ({ profile }) => (
-    <>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Company</Text>
-        <Text style={styles.sectionText}>{profile.recruiterprofile.company_name}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Position</Text>
-        <Text style={styles.sectionText}>{profile.recruiterprofile.position}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Industry</Text>
-        <Text style={styles.sectionText}>{profile.recruiterprofile.industry}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Company Description</Text>
-        <Text style={styles.sectionText}>{profile.recruiterprofile.company_description}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Website</Text>
-        <Text style={[styles.sectionText, styles.linkText]}>{profile.recruiterprofile.company_website}</Text>
-      </View>
-      
-      <TouchableOpacity 
-        style={[styles.button, styles.postJobButton]}
-        onPress={() => navigation.navigate('CreateJob')}
-      >
-        <Ionicons name="add-circle-outline" size={20} color="white" style={styles.buttonIcon} />
-        <Text style={styles.buttonText}>Post New Job</Text>
-      </TouchableOpacity>
-    </>
-  );
-  
-  const JobSeekerProfile = ({ profile }) => (
-    <>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Skills</Text>
-        <View style={styles.skillsContainer}>
-          {profile.jobseekerprofile.skills.split(',').map((skill, index) => (
-            <View key={index} style={styles.skillBadge}>
-              <Text style={styles.skillText}>{skill.trim()}</Text>
-            </View>
-          ))}
+  const AboutTab = ({ profile }) => {
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.bioText}>{profile?.bio || 'No bio available'}</Text>
+        </View>
+        
+        <View style={styles.sectionCard}>
+          <View style={styles.infoRow}>
+            <Ionicons name="mail-outline" size={20} color={COLORS.primaryDark} />
+            <Text style={styles.infoText}>{profile?.user?.email}</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={20} color={COLORS.primaryDark} />
+            <Text style={styles.infoText}>{profile?.location || 'No location set'}</Text>
+          </View>
         </View>
       </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Experience</Text>
-        <Text style={styles.sectionText}>{profile.jobseekerprofile.experience_years} years</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Education</Text>
-        <Text style={styles.sectionText}>{profile.jobseekerprofile.education}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Desired Position</Text>
-        <Text style={styles.sectionText}>{profile.jobseekerprofile.desired_position}</Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Desired Salary</Text>
-        <Text style={styles.sectionText}>
-          ${profile.jobseekerprofile.desired_salary?.toLocaleString() || 'Not specified'}
-        </Text>
-      </View>
-    </>
-  );
+    );
+  };
+  
+  const DetailsTab = ({ profile }) => {
+    if (userType === 'recruiter') {
+      return (
+        <View style={styles.tabContent}>
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="office-building" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Company</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.recruiterprofile.company_name}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="briefcase" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Position</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.recruiterprofile.position}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="tag-multiple" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Industry</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.recruiterprofile.industry}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="information" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Company Description</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.recruiterprofile.company_description}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="web" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Website</Text>
+            </View>
+            <Text style={[styles.sectionText, styles.linkText]}>{profile.recruiterprofile.company_website}</Text>
+          </View>
+        </View>
+      );
+    } else {
+      return (
+        <View style={styles.tabContent}>
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="code-tags" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Skills</Text>
+            </View>
+            <View style={styles.skillsContainer}>
+              {profile.jobseekerprofile.skills.split(',').map((skill, index) => (
+                <View key={index} style={styles.skillBadge}>
+                  <Text style={styles.skillText}>{skill.trim()}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="briefcase-clock" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Experience</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.jobseekerprofile.experience_years} years</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="school" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Education</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.jobseekerprofile.education}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="target" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Desired Position</Text>
+            </View>
+            <Text style={styles.sectionText}>{profile.jobseekerprofile.desired_position}</Text>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionRow}>
+              <MaterialCommunityIcons name="cash" size={22} color={COLORS.primaryDark} />
+              <Text style={styles.sectionLabel}>Desired Salary</Text>
+            </View>
+            <Text style={styles.sectionText}>
+              ${profile.jobseekerprofile.desired_salary?.toLocaleString() || 'Not specified'}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+  };
   
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#ff6b6b" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
@@ -198,8 +277,17 @@ const ProfileScreen = ({ navigation }) => {
   
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
-        <View style={styles.header}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Header section with animation */}
+      <Animated.View style={[styles.header, { height: headerHeight }]}>
+        <LinearGradient
+          colors={[COLORS.primaryDark, COLORS.primary]}
+          style={StyleSheet.absoluteFill}
+        />
+        
+        {/* Header content that fades out when scrolling */}
+        <Animated.View style={[styles.headerContent, { opacity: headerOpacity }]}>
           {profile?.profile_picture ? (
             <Image source={{ uri: profile.profile_picture }} style={styles.profileImage} />
           ) : (
@@ -214,57 +302,109 @@ const ProfileScreen = ({ navigation }) => {
             {profile?.user?.first_name} {profile?.user?.last_name}
           </Text>
           
-          <Text style={styles.username}>@{profile?.user?.username}</Text>
-          
           <View style={styles.roleContainer}>
             <Text style={styles.role}>
               {userType === 'recruiter' ? 'Recruiter' : 'Job Seeker'}
             </Text>
           </View>
-        </View>
+        </Animated.View>
         
-        <View style={styles.infoContainer}>
-          <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={20} color="#666" />
-            <Text style={styles.infoText}>{profile?.user?.email}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={20} color="#666" />
-            <Text style={styles.infoText}>{profile?.location || 'No location set'}</Text>
-          </View>
-        </View>
+        {/* Compact header title that appears when scrolling */}
+        <Animated.View 
+          style={[
+            styles.compactHeader, 
+            { 
+              opacity: titleOpacity,
+            }
+          ]}
+        >
+          <Animated.Text style={[styles.compactHeaderText, { fontSize: titleSize }]}>
+            {profile?.user?.first_name} {profile?.user?.last_name}
+          </Animated.Text>
+        </Animated.View>
         
-        <View style={styles.detailsContainer}>
-          <View style={styles.bioSection}>
-            <Text style={styles.bioTitle}>About</Text>
-            <Text style={styles.bioText}>{profile?.bio || 'No bio available'}</Text>
-          </View>
-          
-          {userType === 'recruiter' ? 
-            <RecruiterProfile profile={profile} /> : 
-            <JobSeekerProfile profile={profile} />
-          }
-        </View>
+        {/* Back button */}
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
         
+        {/* Settings button */}
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => Alert.alert('Coming Soon', 'Settings will be available in a future update.')}
+        >
+          <Ionicons name="settings-outline" size={24} color="white" />
+        </TouchableOpacity>
+      </Animated.View>
+      
+      {/* Tab navigation */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'about' && styles.activeTabButton]} 
+          onPress={() => setActiveTab('about')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'about' && styles.activeTabButtonText]}>
+            About
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'details' && styles.activeTabButton]} 
+          onPress={() => setActiveTab('details')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'details' && styles.activeTabButtonText]}>
+            {userType === 'recruiter' ? 'Company Details' : 'Professional Details'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
+      {/* Scrollable content */}
+      <Animated.ScrollView
+        contentContainerStyle={styles.scrollContent}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+        {activeTab === 'about' ? (
+          <AboutTab profile={profile} />
+        ) : (
+          <DetailsTab profile={profile} />
+        )}
+        
+        {/* Action buttons */}
         <View style={styles.actionsContainer}>
+          {userType === 'recruiter' && (
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('CreateJob')}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="white" style={styles.actionButtonIcon} />
+              <Text style={styles.actionButtonText}>Post New Job</Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity 
-            style={[styles.button, styles.editButton]}
+            style={[styles.actionButton, styles.editButton]}
             onPress={() => Alert.alert('Coming Soon', 'Profile editing will be available in a future update.')}
           >
-            <Ionicons name="create-outline" size={20} color="white" style={styles.buttonIcon} />
-            <Text style={styles.buttonText}>Edit Profile</Text>
+            <Ionicons name="create-outline" size={20} color="white" style={styles.actionButtonIcon} />
+            <Text style={styles.actionButtonText}>Edit Profile</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.button, styles.logoutButton]}
+            style={[styles.actionButton, styles.logoutButton]}
             onPress={handleLogout}
           >
-            <Ionicons name="log-out-outline" size={20} color="white" style={styles.buttonIcon} />
-            <Text style={styles.buttonText}>Logout</Text>
+            <Ionicons name="log-out-outline" size={20} color="white" style={styles.actionButtonIcon} />
+            <Text style={styles.actionButtonText}>Logout</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
@@ -272,22 +412,60 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.background,
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
-    color: '#666',
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
   },
   header: {
-    backgroundColor: '#ff6b6b',
-    padding: 20,
-    paddingTop: 60,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  headerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
+  },
+  compactHeader: {
+    position: 'absolute',
+    bottom: 10,
+    left: 80,
+    right: 80,
+    alignItems: 'center',
+  },
+  compactHeaderText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  backButton: {
+    position: 'absolute',
+    top: SPACING.l + (Platform.OS === 'ios' ? 0 : StatusBar.currentHeight),
+    left: SPACING.m,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: SPACING.l + (Platform.OS === 'ios' ? 0 : StatusBar.currentHeight),
+    right: SPACING.m,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   profileImage: {
@@ -305,7 +483,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 3,
     borderColor: 'white',
     marginBottom: 10,
   },
@@ -315,15 +493,11 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   name: {
-    fontSize: 24,
+    fontSize: FONTS.h1,
     fontWeight: 'bold',
     color: 'white',
     marginBottom: 5,
-  },
-  username: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 10,
+    textAlign: 'center',
   },
   roleContainer: {
     backgroundColor: 'white',
@@ -332,122 +506,132 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   role: {
-    color: '#ff6b6b',
+    color: COLORS.primary,
     fontWeight: 'bold',
   },
-  infoContainer: {
+  tabBar: {
+    flexDirection: 'row',
     backgroundColor: 'white',
-    marginHorizontal: 15,
-    marginTop: -15,
-    borderRadius: 10,
-    padding: 15,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 3,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTabButton: {
+    borderBottomColor: COLORS.primary,
+  },
+  tabButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: FONTS.body,
+    fontWeight: '500',
+  },
+  activeTabButtonText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  scrollContent: {
+    paddingBottom: 50,
+  },
+  tabContent: {
+    padding: SPACING.m,
+  },
+  sectionCard: {
+    ...SHADOWS.small,
+    backgroundColor: 'white',
+    borderRadius: BORDERS.radiusMedium,
+    padding: SPACING.l,
+    marginBottom: SPACING.m,
+  },
+  bioText: {
+    fontSize: FONTS.body,
+    lineHeight: 24,
+    color: COLORS.text,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 5,
-  },
-  infoText: {
-    marginLeft: 10,
-    fontSize: 16,
-    color: '#444',
-  },
-  detailsContainer: {
-    backgroundColor: 'white',
-    margin: 15,
-    borderRadius: 10,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  bioSection: {
-    marginBottom: 20,
-  },
-  bioTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
     marginBottom: 10,
   },
-  bioText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#444',
+  infoText: {
+    fontSize: FONTS.body,
+    color: COLORS.text,
+    marginLeft: 10,
   },
-  section: {
-    marginBottom: 15,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: 16,
+  sectionLabel: {
+    fontSize: FONTS.body,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    color: COLORS.primaryDark,
+    marginLeft: 8,
   },
   sectionText: {
-    fontSize: 16,
-    color: '#444',
+    fontSize: FONTS.body,
+    color: COLORS.text,
     lineHeight: 22,
+    paddingLeft: 30,
   },
   linkText: {
-    color: '#2196F3',
+    color: COLORS.primary,
+    textDecorationLine: 'underline',
   },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 5,
+    paddingLeft: 30,
   },
   skillBadge: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
+    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(25, 118, 210, 0.3)',
   },
   skillText: {
-    fontSize: 14,
-    color: '#555',
+    color: COLORS.primary,
+    fontSize: FONTS.label,
   },
   actionsContainer: {
-    padding: 15,
-    marginBottom: 30,
+    padding: SPACING.l,
   },
-  button: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
+    backgroundColor: COLORS.primary,
+    padding: SPACING.m,
+    borderRadius: BORDERS.radiusMedium,
+    marginBottom: SPACING.m,
+    ...SHADOWS.small,
   },
-  buttonIcon: {
+  actionButtonIcon: {
     marginRight: 10,
   },
-  buttonText: {
+  actionButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: FONTS.body,
     fontWeight: 'bold',
   },
   editButton: {
-    backgroundColor: '#4CAF50',
-  },
-  postJobButton: {
-    backgroundColor: '#2196F3',
-    marginVertical: 15,
+    backgroundColor: COLORS.accent,
   },
   logoutButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: COLORS.error,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,38 +6,62 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
-  FlatList
+  FlatList,
+  Animated,
+  StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const OnboardingScreen = ({ completeOnboarding }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(50)).current;
+  
+  useEffect(() => {
+    // Start entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
   
   // Onboarding screens data
   const slides = [
     {
       id: '1',
       title: 'Welcome to SwipeHire',
-      description: 'Find your perfect job match with our swipe-based job hunting app.',
+      description: 'Find your perfect job match with our swipe-based job hunting app. Modern hiring for the modern workforce.',
       icon: 'briefcase-outline',
-      color: '#4a90e2'
+      color: COLORS.primary
     },
     {
       id: '2',
-      title: 'Swipe Right for Your Dream Job',
-      description: 'Swipe right on jobs you like, left on ones you don\'t. It\'s that simple!',
+      title: 'Swipe Your Way to Success',
+      description: 'Swipe right on jobs you like, left on ones you don\'t. It\'s that simple and intuitive!',
       icon: 'hand-right-outline',
-      color: '#50c878'
+      color: COLORS.accent
     },
     {
       id: '3',
       title: 'Match and Connect',
       description: 'Get matched with employers who are interested in your profile and start chatting instantly.',
       icon: 'chatbubbles-outline',
-      color: '#ff6b6b'
+      color: COLORS.secondary
     }
   ];
   
@@ -49,7 +73,6 @@ const OnboardingScreen = ({ completeOnboarding }) => {
   // Handle "Next" button
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
-      setCurrentIndex(currentIndex + 1);
       flatListRef.current.scrollToIndex({ index: currentIndex + 1 });
     } else {
       completeOnboarding();
@@ -57,15 +80,65 @@ const OnboardingScreen = ({ completeOnboarding }) => {
   };
   
   // Render each onboarding slide
-  const renderItem = ({ item }) => (
-    <View style={styles.slide}>
-      <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
-        <Ionicons name={item.icon} size={80} color="white" />
+  const renderItem = ({ item, index }) => {
+    const inputRange = [
+      (index - 1) * width,
+      index * width,
+      (index + 1) * width
+    ];
+    
+    const opacity = fadeAnim;
+    const translateYValue = translateY;
+    
+    return (
+      <View style={styles.slide}>
+        <LinearGradient
+          colors={[item.color, lightenColor(item.color, 30)]}
+          style={styles.iconBackground}
+        >
+          <Animated.View
+            style={[
+              styles.iconContainer,
+              {
+                opacity,
+                transform: [{ translateY: translateYValue }]
+              }
+            ]}
+          >
+            <Ionicons name={item.icon} size={80} color="white" />
+          </Animated.View>
+        </LinearGradient>
+        
+        <Animated.View
+          style={[
+            styles.textContainer,
+            {
+              opacity,
+              transform: [{ translateY: translateYValue }]
+            }
+          ]}
+        >
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.description}>{item.description}</Text>
+        </Animated.View>
       </View>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.description}>{item.description}</Text>
-    </View>
-  );
+    );
+  };
+  
+  // Function to lighten color for gradient
+  const lightenColor = (color, percent) => {
+    // For simplicity, just return a lighter shade
+    switch (color) {
+      case COLORS.primary:
+        return COLORS.primaryLight;
+      case COLORS.accent:
+        return COLORS.accentLight;
+      case COLORS.secondary:
+        return COLORS.secondaryLight;
+      default:
+        return color;
+    }
+  };
   
   // Render pagination dots
   const renderPagination = () => {
@@ -76,7 +149,10 @@ const OnboardingScreen = ({ completeOnboarding }) => {
             key={index}
             style={[
               styles.dot,
-              { backgroundColor: index === currentIndex ? '#ff6b6b' : '#ccc' }
+              { backgroundColor: index === currentIndex ? 
+                slides[currentIndex].color : 
+                'rgba(0, 0, 0, 0.2)' 
+              }
             ]}
           />
         ))}
@@ -86,6 +162,8 @@ const OnboardingScreen = ({ completeOnboarding }) => {
   
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       <TouchableOpacity 
         style={styles.skipButton} 
         onPress={handleSkip}
@@ -113,12 +191,21 @@ const OnboardingScreen = ({ completeOnboarding }) => {
       {renderPagination()}
       
       <TouchableOpacity 
-        style={styles.button} 
+        style={[
+          styles.button,
+          { backgroundColor: slides[currentIndex].color }
+        ]} 
         onPress={handleNext}
       >
         <Text style={styles.buttonText}>
           {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
         </Text>
+        <Ionicons 
+          name={currentIndex === slides.length - 1 ? "checkmark-circle" : "arrow-forward"} 
+          size={20} 
+          color="white" 
+          style={styles.buttonIcon}
+        />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -136,40 +223,51 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   skipText: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   slide: {
     width,
     alignItems: 'center',
-    padding: 40,
-    paddingTop: 100,
+    padding: SPACING.xl,
+    paddingTop: height * 0.15,
+  },
+  iconBackground: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    marginBottom: SPACING.xl,
+    ...SHADOWS.large,
   },
   iconContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+  },
+  textContainer: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.l,
   },
   title: {
-    fontSize: 28,
+    fontSize: FONTS.h1,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.text,
     textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: SPACING.m,
   },
   description: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: SPACING.l,
   },
   dot: {
     width: 10,
@@ -178,18 +276,24 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   button: {
-    backgroundColor: '#ff6b6b',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    marginBottom: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: BORDERS.radiusLarge,
+    marginBottom: SPACING.xxl,
     alignSelf: 'center',
+    ...SHADOWS.medium,
   },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 18,
+    fontSize: FONTS.body,
   },
+  buttonIcon: {
+    marginLeft: SPACING.s,
+  }
 });
 
 export default OnboardingScreen;

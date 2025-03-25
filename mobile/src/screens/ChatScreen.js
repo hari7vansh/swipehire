@@ -9,12 +9,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Image
+  Image,
+  ActivityIndicator,
+  Animated,
+  StatusBar
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { matchingAPI } from '../services/api';
+import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 
-// Sample messages for the chat
+// Sample messages for the chat (same as original)
 const SAMPLE_MESSAGES = [
   {
     id: 1,
@@ -55,23 +60,44 @@ const ChatScreen = ({ route, navigation }) => {
   const [userId, setUserId] = useState(998); // Default user ID for sample data
   const [loading, setLoading] = useState(true);
   const [userType, setUserType] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   
   const flatListRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const inputHeight = useRef(new Animated.Value(50)).current;
   
   useEffect(() => {
     const fetchData = async () => {
       try {
         const type = await AsyncStorage.getItem('userType');
+        const userIdFromStorage = await AsyncStorage.getItem('userId');
+        
         setUserType(type);
+        if (userIdFromStorage) {
+          setUserId(parseInt(userIdFromStorage));
+        }
         
-        // In a real app, fetch real messages from API
-        // For now, using sample data with a delay to simulate loading
-        setTimeout(() => {
+        // In a real app, fetch messages from API
+        try {
+          const response = await matchingAPI.getMessages(match.id);
+          if (response?.data) {
+            setMessages(response.data);
+          } else {
+            setMessages(SAMPLE_MESSAGES);
+          }
+        } catch (error) {
+          console.error('Error fetching messages:', error);
           setMessages(SAMPLE_MESSAGES);
-          setLoading(false);
-        }, 500);
+        }
         
-        // Set the chat title
+        // Animate fade in
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+        
+        // Set the chat title and configure header
         const chatName = userType === 'job_seeker' 
           ? match.job.recruiter.company_name
           : `${match.job_seeker.profile.user.first_name} ${match.job_seeker.profile.user.last_name}`;
@@ -79,40 +105,121 @@ const ChatScreen = ({ route, navigation }) => {
         navigation.setOptions({
           title: chatName,
           headerStyle: {
-            backgroundColor: '#fff',
+            backgroundColor: COLORS.card,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 1,
+            borderBottomColor: COLORS.border,
           },
           headerTitleStyle: {
-            fontSize: 18,
-            color: '#333',
+            fontSize: FONTS.h3,
+            color: COLORS.text,
+            fontWeight: 'bold',
           },
-          headerBackTitle: 'Back',
+          headerLeft: () => (
+            <TouchableOpacity 
+              style={{ marginLeft: 10 }}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity 
+              style={{ marginRight: 15 }}
+              onPress={() => console.log('Info pressed')}
+            >
+              <Ionicons name="information-circle-outline" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+          ),
         });
       } catch (error) {
         console.error('Error fetching chat data:', error);
+        setMessages(SAMPLE_MESSAGES);
+      } finally {
         setLoading(false);
       }
     };
     
     fetchData();
-  }, [navigation, match, userType]);
+  }, [navigation, match]);
   
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!inputText.trim()) return;
     
+    setSendingMessage(true);
+    
+    // Optimistically add the message to the UI immediately
+    const tempId = Date.now();
     const newMessage = {
-      id: Date.now(),
+      id: tempId,
       sender_id: userId,
       content: inputText.trim(),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      pending: true // Mark as pending until confirmed
     };
     
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
     
+    // Auto expand the text input back to normal size
+    Animated.timing(inputHeight, {
+      toValue: 50,
+      duration: 100,
+      useNativeDriver: false
+    }).start();
+    
     // Scroll to the bottom after new message
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+    
+    try {
+      // Send message to API
+      const response = await matchingAPI.sendMessage({
+        match_id: match.id,
+        content: newMessage.content
+      });
+      
+      // If successful, update the message to remove pending state
+      if (response?.data) {
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === tempId ? { ...response.data, pending: false } : msg
+          )
+        );
+      } else {
+        // If API didn't return data, just remove pending state
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === tempId ? { ...msg, pending: false } : msg
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      // Show error state for the message
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempId ? { ...msg, pending: false, error: true } : msg
+        )
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+  
+  const handleInputChange = (text) => {
+    setInputText(text);
+    
+    // Animate height increase for multiline text
+    const newHeight = Math.min(120, Math.max(50, text.split('\n').length * 24));
+    Animated.timing(inputHeight, {
+      toValue: newHeight,
+      duration: 100,
+      useNativeDriver: false
+    }).start();
   };
   
   const formatTime = (dateString) => {
@@ -120,27 +227,73 @@ const ChatScreen = ({ route, navigation }) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  const renderMessage = ({ item }) => {
-    const isOwnMessage = item.sender_id === userId;
+  const formatMessageDate = (dateString) => {
+    const messageDate = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
     
+    if (messageDate.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (messageDate.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      return messageDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: messageDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+      });
+    }
+  };
+  
+  const renderMessage = ({ item, index }) => {
+    const isOwnMessage = item.sender_id === userId;
+    const showDateHeader = index === 0 || 
+      formatMessageDate(item.created_at) !== formatMessageDate(messages[index - 1].created_at);
+      
     return (
-      <View style={[
-        styles.messageContainer,
-        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
-      ]}>
+      <Animated.View style={{ opacity: fadeAnim }}>
+        {showDateHeader && (
+          <View style={styles.dateHeaderContainer}>
+            <Text style={styles.dateHeader}>{formatMessageDate(item.created_at)}</Text>
+          </View>
+        )}
+        
         <View style={[
-          styles.messageBubble,
-          isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble
+          styles.messageContainer,
+          isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
         ]}>
-          <Text style={[
-            styles.messageText,
-            isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+          <View style={[
+            styles.messageBubble,
+            isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+            item.pending && styles.pendingMessage,
+            item.error && styles.errorMessage
           ]}>
-            {item.content}
-          </Text>
+            <Text style={[
+              styles.messageText,
+              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+            ]}>
+              {item.content}
+            </Text>
+            
+            <View style={styles.messageFooter}>
+              <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
+              
+              {item.pending && (
+                <Ionicons name="time-outline" size={12} color={isOwnMessage ? "rgba(255,255,255,0.6)" : COLORS.textLight} style={styles.messageIcon} />
+              )}
+              
+              {item.error && (
+                <Ionicons name="alert-circle" size={12} color={COLORS.error} style={styles.messageIcon} />
+              )}
+              
+              {!item.pending && !item.error && isOwnMessage && (
+                <Ionicons name="checkmark-done" size={12} color="rgba(255,255,255,0.6)" style={styles.messageIcon} />
+              )}
+            </View>
+          </View>
         </View>
-        <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
-      </View>
+      </Animated.View>
     );
   };
   
@@ -152,15 +305,26 @@ const ChatScreen = ({ route, navigation }) => {
         <View style={styles.jobInfoContainer}>
           <Text style={styles.jobTitle}>{jobTitle}</Text>
           <Text style={styles.matchDate}>
-            Matched on {new Date(match.created_at).toLocaleDateString()}
+            Matched on {new Date(match.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
           </Text>
         </View>
       </View>
     );
   };
   
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading conversation...</Text>
+      </View>
+    );
+  }
+  
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidingView}
@@ -176,32 +340,39 @@ const ChatScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.messagesList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          showsVerticalScrollIndicator={false}
         />
         
         <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Type a message..."
-            multiline
-            returnKeyType="send"
-            onSubmitEditing={sendMessage}
-          />
-          <TouchableOpacity 
-            style={[
-              styles.sendButton,
-              !inputText.trim() ? styles.sendButtonDisabled : {}
-            ]} 
-            onPress={sendMessage}
-            disabled={!inputText.trim()}
-          >
-            <Ionicons 
-              name="send" 
-              size={24} 
-              color={!inputText.trim() ? '#ccc' : 'white'} 
+          <Animated.View style={[styles.inputWrapper, { height: inputHeight }]}>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={handleInputChange}
+              placeholder="Type a message..."
+              multiline
+              placeholderTextColor={COLORS.placeholder}
             />
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.sendButton,
+                !inputText.trim() ? styles.sendButtonDisabled : {},
+                sendingMessage && styles.sendingButton
+              ]} 
+              onPress={sendMessage}
+              disabled={!inputText.trim() || sendingMessage}
+            >
+              {sendingMessage ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons 
+                  name="send" 
+                  size={20} 
+                  color={!inputText.trim() ? COLORS.textLight : 'white'} 
+                />
+              )}
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -211,44 +382,62 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
   },
   keyboardAvoidingView: {
     flex: 1,
   },
   listHeader: {
-    marginBottom: 20,
+    marginBottom: SPACING.l,
   },
   chatHeaderContainer: {
-    padding: 15,
+    padding: SPACING.m,
     backgroundColor: 'white',
-    borderRadius: 12,
-    margin: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: BORDERS.radiusMedium,
+    margin: SPACING.m,
+    ...SHADOWS.small,
   },
   jobInfoContainer: {
-    marginLeft: 10,
+    marginLeft: SPACING.s,
   },
   jobTitle: {
-    fontSize: 18,
+    fontSize: FONTS.h4,
     fontWeight: 'bold',
     marginBottom: 5,
-    color: '#333',
+    color: COLORS.text,
   },
   matchDate: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: FONTS.label,
+    color: COLORS.textSecondary,
   },
   messagesList: {
-    padding: 10,
-    paddingBottom: 20,
+    padding: SPACING.m,
+    paddingBottom: SPACING.xl,
+  },
+  dateHeaderContainer: {
+    alignItems: 'center',
+    marginVertical: SPACING.m,
+  },
+  dateHeader: {
+    fontSize: FONTS.caption,
+    color: COLORS.textSecondary,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDERS.radiusLarge,
   },
   messageContainer: {
-    marginVertical: 5,
+    marginVertical: SPACING.xs,
     maxWidth: '80%',
   },
   ownMessageContainer: {
@@ -260,65 +449,89 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   messageBubble: {
-    padding: 12,
-    borderRadius: 18,
+    padding: SPACING.m,
+    borderRadius: BORDERS.radiusLarge,
+    ...SHADOWS.small,
   },
   ownMessageBubble: {
-    backgroundColor: '#ff6b6b',
-    borderBottomRightRadius: 4,
+    backgroundColor: COLORS.primary,
+    borderBottomRightRadius: BORDERS.radiusSmall,
   },
   otherMessageBubble: {
-    backgroundColor: '#e5e5e5',
-    borderBottomLeftRadius: 4,
+    backgroundColor: COLORS.card,
+    borderBottomLeftRadius: BORDERS.radiusSmall,
+  },
+  pendingMessage: {
+    opacity: 0.8,
+  },
+  errorMessage: {
+    borderWidth: 1,
+    borderColor: COLORS.error,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: FONTS.body,
     lineHeight: 22,
   },
   ownMessageText: {
     color: 'white',
   },
   otherMessageText: {
-    color: '#333',
+    color: COLORS.text,
   },
-  messageTime: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  inputContainer: {
+  messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: 'white',
+    justifyContent: 'flex-end',
+    marginTop: SPACING.xs,
+  },
+  messageTime: {
+    fontSize: FONTS.small,
+    color: COLORS.textLight,
+    marginRight: 5,
+  },
+  messageIcon: {
+    marginLeft: 2,
+  },
+  inputContainer: {
+    backgroundColor: COLORS.card,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: COLORS.border,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.m,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    backgroundColor: COLORS.background,
+    borderRadius: 25,
+    paddingHorizontal: SPACING.m,
+    paddingTop: Platform.OS === 'ios' ? 12 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
     paddingRight: 40,
+    fontSize: FONTS.body,
+    color: COLORS.text,
     maxHeight: 120,
-    fontSize: 16,
   },
   sendButton: {
     position: 'absolute',
-    right: 24,
-    bottom: 14,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#ff6b6b',
+    right: 8,
+    bottom: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.border,
   },
+  sendingButton: {
+    backgroundColor: COLORS.primaryLight,
+  }
 });
 
 export default ChatScreen;

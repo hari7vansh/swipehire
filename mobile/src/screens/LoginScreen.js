@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,20 +11,54 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  Animated,
+  Dimensions,
+  StatusBar // Added StatusBar import
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI, API_URL } from '../services/api';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+
+const { width, height } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [secureTextEntry, setSecureTextEntry] = useState(true);
+  
+  // Animation references
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(50)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
   
   useEffect(() => {
     // Clear any previous errors when component mounts
     setError('');
+    
+    // Start animations - all using useNativeDriver: true for consistency
+    Animated.parallel([
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUp, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 7,
+        tension: 40,
+        useNativeDriver: true,
+      })
+    ]).start();
   }, []);
 
   const validateForm = () => {
@@ -96,24 +130,56 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary]}
+        style={styles.headerBackground}
+      />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.logoContainer}>
+          <Animated.View 
+            style={[
+              styles.logoContainer,
+              {
+                opacity: fadeIn,
+                transform: [
+                  { translateY: slideUp },
+                  { scale: logoScale }
+                ]
+              }
+            ]}
+          >
             <Text style={styles.logoText}>SwipeHire</Text>
             <Text style={styles.tagline}>Find your perfect match</Text>
-          </View>
+          </Animated.View>
           
-          <View style={styles.formContainer}>
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          <Animated.View 
+            style={[
+              styles.formContainer,
+              {
+                opacity: fadeIn,
+                transform: [{ translateY: slideUp }]
+              }
+            ]}
+          >
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="white" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
             
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Username</Text>
+              <Ionicons name="person-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter your username"
+                placeholder="Username"
+                placeholderTextColor={COLORS.placeholder}
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
@@ -122,14 +188,25 @@ const LoginScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Ionicons name="lock-closed-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter your password"
+                placeholder="Password"
+                placeholderTextColor={COLORS.placeholder}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={secureTextEntry}
               />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setSecureTextEntry(!secureTextEntry)}
+              >
+                <Ionicons
+                  name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color={COLORS.textSecondary}
+                />
+              </TouchableOpacity>
             </View>
             
             <TouchableOpacity
@@ -147,7 +224,10 @@ const LoginScreen = ({ navigation }) => {
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.loginButtonText}>Log In</Text>
+                <>
+                  <Ionicons name="log-in-outline" size={20} color="white" style={styles.buttonIcon} />
+                  <Text style={styles.loginButtonText}>Log In</Text>
+                </>
               )}
             </TouchableOpacity>
 
@@ -164,27 +244,19 @@ const LoginScreen = ({ navigation }) => {
                 style={styles.debugButton} 
                 onPress={async () => {
                   try {
-                    const response = await fetch(`${API_URL}/users/login/`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        username: 'recruiter',
-                        password: 'password123',
-                      }),
-                    });
-                    const text = await response.text();
-                    Alert.alert('API Test Result', text.substring(0, 200));
+                    await AsyncStorage.setItem('token', 'debug-token');
+                    await AsyncStorage.setItem('userType', 'job_seeker');
+                    await AsyncStorage.setItem('userId', '2');
+                    Alert.alert('Debug Mode', 'Logged in as job seeker');
                   } catch (error) {
-                    Alert.alert('API Test Error', error.message);
+                    Alert.alert('Debug Error', error.message);
                   }
                 }}
               >
-                <Text style={styles.debugButtonText}>Test API Connection</Text>
+                <Text style={styles.debugButtonText}>Developer Login</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -194,100 +266,128 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
+  },
+  headerBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.4,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
+    paddingHorizontal: SPACING.l,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginTop: height * 0.1,
+    marginBottom: height * 0.05,
   },
   logoText: {
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: 'bold',
-    color: '#ff6b6b',
-    marginBottom: 10,
+    color: 'white',
+    marginBottom: SPACING.s,
   },
   tagline: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: FONTS.body,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   formContainer: {
-    width: '100%',
+    backgroundColor: 'white',
+    borderRadius: BORDERS.radiusMedium,
+    paddingHorizontal: SPACING.l,
+    paddingVertical: SPACING.xl,
+    ...SHADOWS.large,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.error,
+    padding: SPACING.m,
+    borderRadius: BORDERS.radiusMedium,
+    marginBottom: SPACING.m,
   },
   errorText: {
-    color: '#ff3b30',
-    marginBottom: 15,
-    textAlign: 'center',
+    color: 'white',
+    marginLeft: SPACING.s,
+    flex: 1,
   },
   inputContainer: {
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDERS.radiusMedium,
+    marginBottom: SPACING.m,
+    backgroundColor: COLORS.background,
   },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
+  inputIcon: {
+    padding: SPACING.m,
   },
   input: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    flex: 1,
+    height: 50,
+    fontSize: FONTS.body,
+    color: COLORS.text,
+  },
+  eyeIcon: {
+    padding: SPACING.m,
   },
   forgotPasswordButton: {
     alignSelf: 'flex-end',
-    marginBottom: 20,
+    marginBottom: SPACING.l,
   },
   forgotPasswordText: {
-    color: '#ff6b6b',
-    fontSize: 14,
+    color: COLORS.primary,
+    fontSize: FONTS.label,
   },
   loginButton: {
-    backgroundColor: '#ff6b6b',
-    borderRadius: 8,
-    padding: 15,
+    backgroundColor: COLORS.primary,
+    borderRadius: BORDERS.radiusMedium,
+    padding: SPACING.m,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    flexDirection: 'row',
+    ...SHADOWS.medium,
+  },
+  buttonIcon: {
+    marginRight: SPACING.s,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: FONTS.body,
     fontWeight: 'bold',
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: SPACING.l,
   },
   registerText: {
-    color: '#666',
-    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontSize: FONTS.body,
   },
   registerLink: {
-    color: '#ff6b6b',
-    fontSize: 14,
+    color: COLORS.primary,
+    fontSize: FONTS.body,
     fontWeight: 'bold',
   },
   // Debug styles - remove in production
   debugButton: {
-    marginTop: 20,
-    backgroundColor: '#ddd',
-    padding: 10,
-    borderRadius: 5,
+    marginTop: SPACING.xl,
+    backgroundColor: '#eee',
+    padding: SPACING.s,
+    borderRadius: BORDERS.radiusMedium,
     alignItems: 'center',
   },
   debugButtonText: {
-    color: '#333',
-    fontSize: 12,
+    color: '#666',
+    fontSize: FONTS.caption,
   },
 });
 
