@@ -13,13 +13,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Dimensions
+  Dimensions,
+  StatusBar
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { authAPI } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -51,8 +53,22 @@ const RegisterScreen = ({ navigation }) => {
   const slideInRight = useRef(new Animated.Value(width)).current;
   const slideOutLeft = useRef(new Animated.Value(0)).current;
   
+  // Progress indicator animation
+  const progressWidth = useRef(new Animated.Value(0)).current;
+  const progressValue = progressWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"]
+  });
+  
   useEffect(() => {
-    // Start animations
+    // Update progress based on step
+    Animated.timing(progressWidth, {
+      toValue: currentStep === 1 ? 0.5 : 1,
+      duration: 300,
+      useNativeDriver: false
+    }).start();
+    
+    // Start entrance animations
     Animated.parallel([
       Animated.timing(fadeIn, {
         toValue: 1,
@@ -65,11 +81,16 @@ const RegisterScreen = ({ navigation }) => {
         useNativeDriver: true,
       })
     ]).start();
-  }, []);
+  }, [currentStep]);
   
   const nextStep = () => {
     if (currentStep === 1) {
       if (!validateStep1()) return;
+      
+      // Haptic feedback for moving to next step
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     }
     
     // Animate step transition
@@ -92,6 +113,11 @@ const RegisterScreen = ({ navigation }) => {
   };
   
   const prevStep = () => {
+    // Haptic feedback for going back
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
     // Animate step transition (reverse)
     Animated.parallel([
       Animated.timing(slideOutLeft, {
@@ -119,6 +145,11 @@ const RegisterScreen = ({ navigation }) => {
   };
   
   const toggleUserType = () => {
+    // Haptic feedback for toggle
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
     setIsRecruiter(!isRecruiter);
     handleChange('user_type', !isRecruiter ? 'recruiter' : 'job_seeker');
   };
@@ -158,6 +189,11 @@ const RegisterScreen = ({ navigation }) => {
   const handleRegister = async () => {
     if (!validateStep2()) return;
     
+    // Haptic feedback for submitting form
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    
     setLoading(true);
     try {
       // In a real app, this would connect to your API
@@ -178,6 +214,11 @@ const RegisterScreen = ({ navigation }) => {
       await AsyncStorage.setItem('userType', mockResponse.data.user_type);
       await AsyncStorage.setItem('userId', mockResponse.data.user_id.toString());
       
+      // Success feedback
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      
       // Show success message
       Alert.alert(
         "Account Created!",
@@ -196,6 +237,12 @@ const RegisterScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('Registration error:', error);
+      
+      // Error feedback
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      
       setError(error.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
@@ -211,8 +258,8 @@ const RegisterScreen = ({ navigation }) => {
         },
       ]}
     >
-      <Text style={styles.stepTitle}>Basic Information</Text>
-      <Text style={styles.stepDescription}>Create your account credentials</Text>
+      <Text style={styles.stepTitle}>Create Account</Text>
+      <Text style={styles.stepDescription}>Enter your basic information to get started</Text>
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Username *</Text>
@@ -275,26 +322,50 @@ const RegisterScreen = ({ navigation }) => {
       <View style={styles.userTypeContainer}>
         <Text style={styles.userTypeLabel}>I am registering as:</Text>
         <View style={styles.switchContainer}>
-          <Text style={isRecruiter ? styles.userTypeInactive : styles.userTypeActive}>
-            Job Seeker
-          </Text>
+          <View style={[styles.userTypeOption, !isRecruiter && styles.activeOption]}>
+            <MaterialCommunityIcons 
+              name="briefcase-search" 
+              size={20} 
+              color={!isRecruiter ? COLORS.primary : COLORS.textSecondary} 
+            />
+            <Text style={isRecruiter ? styles.userTypeInactive : styles.userTypeActive}>
+              Job Seeker
+            </Text>
+          </View>
+          
           <Switch
             value={isRecruiter}
             onValueChange={toggleUserType}
             trackColor={{ false: COLORS.primary, true: COLORS.accent }}
             thumbColor="white"
             ios_backgroundColor={COLORS.primary}
+            style={styles.switch}
           />
-          <Text style={isRecruiter ? styles.userTypeActive : styles.userTypeInactive}>
-            Recruiter
-          </Text>
+          
+          <View style={[styles.userTypeOption, isRecruiter && styles.activeOption]}>
+            <MaterialCommunityIcons 
+              name="account-tie" 
+              size={20} 
+              color={isRecruiter ? COLORS.accent : COLORS.textSecondary} 
+            />
+            <Text style={isRecruiter ? styles.userTypeActive : styles.userTypeInactive}>
+              Recruiter
+            </Text>
+          </View>
         </View>
       </View>
       
       <TouchableOpacity 
         style={styles.nextButton} 
         onPress={nextStep}
+        activeOpacity={0.8}
       >
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
         <Text style={styles.nextButtonText}>Next</Text>
         <Ionicons name="arrow-forward" size={20} color="white" />
       </TouchableOpacity>
@@ -315,7 +386,11 @@ const RegisterScreen = ({ navigation }) => {
       ]}
     >
       <Text style={styles.stepTitle}>Profile Details</Text>
-      <Text style={styles.stepDescription}>Tell us more about {isRecruiter ? 'your company' : 'yourself'}</Text>
+      <Text style={styles.stepDescription}>
+        {isRecruiter 
+          ? 'Tell us about your company and role' 
+          : 'Share some information about yourself'}
+      </Text>
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>First Name</Text>
@@ -412,6 +487,7 @@ const RegisterScreen = ({ navigation }) => {
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={prevStep}
+          activeOpacity={0.8}
         >
           <Ionicons name="arrow-back" size={20} color={COLORS.primary} />
           <Text style={styles.backButtonText}>Back</Text>
@@ -421,7 +497,14 @@ const RegisterScreen = ({ navigation }) => {
           style={styles.registerButton} 
           onPress={handleRegister}
           disabled={loading}
+          activeOpacity={0.8}
         >
+          <LinearGradient
+            colors={[COLORS.accent, COLORS.accentDark]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
@@ -437,16 +520,59 @@ const RegisterScreen = ({ navigation }) => {
   
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Background gradient */}
       <LinearGradient
         colors={[COLORS.primaryDark, COLORS.primary]}
         style={styles.headerBackground}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header with back button */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButtonTop}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Sign Up</Text>
+          </View>
+          
+          {/* Progress bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <Animated.View 
+                style={[
+                  styles.progressFill,
+                  {
+                    width: progressValue
+                  }
+                ]} 
+              />
+            </View>
+            <View style={styles.stepsIndicator}>
+              <View style={[styles.stepDot, styles.activeStep]}>
+                <Text style={styles.stepNumber}>1</Text>
+              </View>
+              <View style={styles.stepLine} />
+              <View style={[styles.stepDot, currentStep >= 2 && styles.activeStep]}>
+                <Text style={styles.stepNumber}>2</Text>
+              </View>
+            </View>
+          </View>
+          
           <Animated.View
             style={[
               styles.formContainer,
@@ -456,16 +582,6 @@ const RegisterScreen = ({ navigation }) => {
               },
             ]}
           >
-            <View style={styles.stepsIndicator}>
-              <View style={[styles.stepDot, currentStep >= 1 && styles.activeStep]}>
-                <Text style={styles.stepNumber}>1</Text>
-              </View>
-              <View style={styles.stepLine} />
-              <View style={[styles.stepDot, currentStep >= 2 && styles.activeStep]}>
-                <Text style={styles.stepNumber}>2</Text>
-              </View>
-            </View>
-            
             {error ? (
               <View style={styles.errorContainer}>
                 <Ionicons name="alert-circle" size={20} color="white" />
@@ -480,7 +596,10 @@ const RegisterScreen = ({ navigation }) => {
             
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.footerLink}>Sign In</Text>
               </TouchableOpacity>
             </View>
@@ -501,48 +620,86 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: height * 0.25,
+    height: height * 0.3,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.l,
+    paddingBottom: SPACING.xl,
   },
-  formContainer: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.l,
+    paddingTop: Platform.OS === 'ios' ? SPACING.l : StatusBar.currentHeight + SPACING.m,
+    paddingBottom: SPACING.m,
+  },
+  backButtonTop: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.m,
+  },
+  headerTitle: {
+    fontSize: FONTS.h2,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  progressContainer: {
+    paddingHorizontal: SPACING.l,
+    marginBottom: SPACING.l,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: SPACING.m,
+  },
+  progressFill: {
+    height: '100%',
     backgroundColor: 'white',
-    borderRadius: BORDERS.radiusMedium,
-    padding: SPACING.l,
-    ...SHADOWS.large,
+    borderRadius: 3,
   },
   stepsIndicator: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.l,
   },
   stepDot: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: COLORS.border,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   activeStep: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'white',
   },
   stepNumber: {
-    color: 'white',
+    color: COLORS.primary,
     fontWeight: 'bold',
   },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: COLORS.border,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     marginHorizontal: SPACING.s,
+  },
+  formContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: SPACING.l,
+    paddingTop: SPACING.l,
+    paddingBottom: SPACING.m,
+    ...SHADOWS.large,
   },
   errorContainer: {
     flexDirection: 'row',
@@ -559,13 +716,13 @@ const styles = StyleSheet.create({
   },
   stepsContainer: {
     position: 'relative',
-    minHeight: 400, // Adjust based on your content
+    minHeight: 400, // Adjust based on content
   },
   stepContainer: {
     width: '100%',
   },
   stepTitle: {
-    fontSize: FONTS.h3,
+    fontSize: FONTS.h2,
     fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: SPACING.xs,
@@ -591,13 +748,14 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: BORDERS.radiusMedium,
     backgroundColor: COLORS.background,
+    ...SHADOWS.small,
   },
   inputIcon: {
     padding: SPACING.m,
   },
   input: {
     flex: 1,
-    height: 48,
+    height: 54,
     fontSize: FONTS.body,
     color: COLORS.text,
   },
@@ -616,32 +774,49 @@ const styles = StyleSheet.create({
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     backgroundColor: COLORS.background,
     padding: SPACING.m,
     borderRadius: BORDERS.radiusMedium,
     borderWidth: 1,
     borderColor: COLORS.border,
+    ...SHADOWS.small,
+  },
+  userTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.s,
+    borderRadius: BORDERS.radiusMedium,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  activeOption: {
+    backgroundColor: 'rgba(25, 118, 210, 0.1)',
   },
   userTypeActive: {
     fontSize: FONTS.body,
     fontWeight: 'bold',
     color: COLORS.text,
-    marginHorizontal: SPACING.m,
+    marginLeft: SPACING.xs,
   },
   userTypeInactive: {
     fontSize: FONTS.body,
     color: COLORS.textSecondary,
+    marginLeft: SPACING.xs,
+  },
+  switch: {
+    transform: [{ scale: 1.1 }],
     marginHorizontal: SPACING.m,
   },
   nextButton: {
-    backgroundColor: COLORS.primary,
     borderRadius: BORDERS.radiusMedium,
     padding: SPACING.m,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    ...SHADOWS.small,
+    height: 56,
+    overflow: 'hidden',
+    ...SHADOWS.medium,
   },
   nextButtonText: {
     color: 'white',
@@ -659,11 +834,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: SPACING.m,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.primary,
     borderRadius: BORDERS.radiusMedium,
-    flex: 1,
-    marginRight: SPACING.m,
+    width: '30%',
   },
   backButtonText: {
     color: COLORS.primary,
@@ -672,14 +846,15 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.xs,
   },
   registerButton: {
-    backgroundColor: COLORS.accent,
     borderRadius: BORDERS.radiusMedium,
     padding: SPACING.m,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    flex: 2,
-    ...SHADOWS.small,
+    overflow: 'hidden',
+    width: '65%',
+    height: 56,
+    ...SHADOWS.medium,
   },
   registerButtonText: {
     color: 'white',

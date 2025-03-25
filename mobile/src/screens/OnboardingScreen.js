@@ -10,9 +10,10 @@ import {
   Animated,
   StatusBar
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +24,11 @@ const OnboardingScreen = ({ completeOnboarding }) => {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
+  const dotScale = useRef([
+    new Animated.Value(1),
+    new Animated.Value(0.5),
+    new Animated.Value(0.5)
+  ]).current;
   
   useEffect(() => {
     // Start entrance animation
@@ -38,86 +44,118 @@ const OnboardingScreen = ({ completeOnboarding }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+    
+    // Animate dot scales when index changes
+    dotScale.forEach((dot, index) => {
+      Animated.spring(dot, {
+        toValue: currentIndex === index ? 1 : 0.5,
+        friction: 4,
+        useNativeDriver: true
+      }).start();
+    });
+  }, [currentIndex]);
   
   // Onboarding screens data
   const slides = [
     {
       id: '1',
-      title: 'Welcome to SwipeHire',
-      description: 'Find your perfect job match with our swipe-based job hunting app. Modern hiring for the modern workforce.',
-      icon: 'briefcase-outline',
+      title: 'Find Your Perfect Match',
+      description: 'SwipeHire connects job seekers with great opportunities through an intuitive swipe interface. Modern hiring for the modern workforce.',
+      icon: 'briefcase',
+      iconComponent: Ionicons,
       color: COLORS.primary
     },
     {
       id: '2',
       title: 'Swipe Your Way to Success',
-      description: 'Swipe right on jobs you like, left on ones you don\'t. It\'s that simple and intuitive!',
-      icon: 'hand-right-outline',
+      description: 'Swipe right on jobs you\'re interested in, left on ones you\'re not. It\'s that simple and intuitive!',
+      icon: 'hand-right',
+      iconComponent: Ionicons,
       color: COLORS.accent
     },
     {
       id: '3',
-      title: 'Match and Connect',
-      description: 'Get matched with employers who are interested in your profile and start chatting instantly.',
-      icon: 'chatbubbles-outline',
+      title: 'Chat and Connect',
+      description: 'Get matched with employers who are interested in your profile and start chatting instantly. Your dream job is just a swipe away.',
+      icon: 'chatbubbles',
+      iconComponent: Ionicons,
       color: COLORS.secondary
     }
   ];
   
   // Handle "Skip" button
   const handleSkip = () => {
+    // Haptic feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     completeOnboarding();
   };
   
   // Handle "Next" button
   const handleNext = () => {
+    // Haptic feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
     if (currentIndex < slides.length - 1) {
-      flatListRef.current.scrollToIndex({ index: currentIndex + 1 });
+      flatListRef.current.scrollToIndex({ index: currentIndex + 1, animated: true });
     } else {
+      // Final slide, complete onboarding
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       completeOnboarding();
     }
   };
   
   // Render each onboarding slide
   const renderItem = ({ item, index }) => {
-    const inputRange = [
-      (index - 1) * width,
-      index * width,
-      (index + 1) * width
-    ];
+    const IconComponent = item.iconComponent;
     
+    // Animation values for this slide
     const opacity = fadeAnim;
     const translateYValue = translateY;
     
     return (
       <View style={styles.slide}>
-        <LinearGradient
-          colors={[item.color, lightenColor(item.color, 30)]}
-          style={styles.iconBackground}
-        >
-          <Animated.View
-            style={[
-              styles.iconContainer,
-              {
-                opacity,
-                transform: [{ translateY: translateYValue }]
-              }
-            ]}
-          >
-            <Ionicons name={item.icon} size={80} color="white" />
-          </Animated.View>
-        </LinearGradient>
-        
+        {/* Large illustration icon */}
         <Animated.View
           style={[
-            styles.textContainer,
+            styles.illustrationContainer,
             {
               opacity,
               transform: [{ translateY: translateYValue }]
             }
           ]}
         >
+          <LinearGradient
+            colors={[item.color, lightenColor(item.color)]}
+            style={styles.illustrationBackground}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <IconComponent name={item.icon} size={100} color="white" />
+          </LinearGradient>
+        </Animated.View>
+        
+        {/* Content area */}
+        <Animated.View
+          style={[
+            styles.contentContainer,
+            {
+              opacity,
+              transform: [{ translateY: translateYValue }]
+            }
+          ]}
+        >
+          {/* Icon */}
+          <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
+            <IconComponent name={item.icon} size={32} color="white" />
+          </View>
+          
+          {/* Text content */}
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.description}>{item.description}</Text>
         </Animated.View>
@@ -125,10 +163,10 @@ const OnboardingScreen = ({ completeOnboarding }) => {
     );
   };
   
-  // Function to lighten color for gradient
-  const lightenColor = (color, percent) => {
-    // For simplicity, just return a lighter shade
-    switch (color) {
+  // Helper function to lighten a color
+  const lightenColor = (color) => {
+    // Return a lighter version of the color
+    switch(color) {
       case COLORS.primary:
         return COLORS.primaryLight;
       case COLORS.accent:
@@ -145,13 +183,13 @@ const OnboardingScreen = ({ completeOnboarding }) => {
     return (
       <View style={styles.paginationContainer}>
         {slides.map((_, index) => (
-          <View
+          <Animated.View
             key={index}
             style={[
               styles.dot,
-              { backgroundColor: index === currentIndex ? 
-                slides[currentIndex].color : 
-                'rgba(0, 0, 0, 0.2)' 
+              { 
+                backgroundColor: slides[index].color,
+                transform: [{ scale: dotScale[index] }]
               }
             ]}
           />
@@ -164,13 +202,18 @@ const OnboardingScreen = ({ completeOnboarding }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      <TouchableOpacity 
-        style={styles.skipButton} 
-        onPress={handleSkip}
-      >
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
+      {/* Top header with skip button */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.skipButton} 
+          onPress={handleSkip}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+      </View>
       
+      {/* Slides */}
       <FlatList
         ref={flatListRef}
         data={slides}
@@ -186,27 +229,32 @@ const OnboardingScreen = ({ completeOnboarding }) => {
           );
           setCurrentIndex(index);
         }}
+        style={styles.flatList}
       />
       
-      {renderPagination()}
-      
-      <TouchableOpacity 
-        style={[
-          styles.button,
-          { backgroundColor: slides[currentIndex].color }
-        ]} 
-        onPress={handleNext}
-      >
-        <Text style={styles.buttonText}>
-          {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
-        </Text>
-        <Ionicons 
-          name={currentIndex === slides.length - 1 ? "checkmark-circle" : "arrow-forward"} 
-          size={20} 
-          color="white" 
-          style={styles.buttonIcon}
-        />
-      </TouchableOpacity>
+      {/* Bottom controls - pagination dots and next button */}
+      <View style={styles.controls}>
+        {renderPagination()}
+        
+        <TouchableOpacity 
+          style={[
+            styles.button,
+            { backgroundColor: slides[currentIndex].color }
+          ]} 
+          onPress={handleNext}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>
+            {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
+          </Text>
+          <Ionicons 
+            name={currentIndex === slides.length - 1 ? "checkmark-circle" : "arrow-forward"} 
+            size={20} 
+            color="white" 
+            style={styles.buttonIcon}
+          />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -216,40 +264,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
+  header: {
+    padding: SPACING.m,
+    alignItems: 'flex-end',
+  },
   skipButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
+    padding: SPACING.s,
   },
   skipText: {
     fontSize: FONTS.body,
     color: COLORS.textSecondary,
     fontWeight: '500',
   },
+  flatList: {
+    flex: 1,
+  },
   slide: {
     width,
+    flex: 1,
     alignItems: 'center',
-    padding: SPACING.xl,
-    paddingTop: height * 0.15,
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.l,
   },
-  iconBackground: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    marginBottom: SPACING.xl,
-    ...SHADOWS.large,
-  },
-  iconContainer: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+  illustrationContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    padding: SPACING.m,
+    marginBottom: SPACING.m,
   },
-  textContainer: {
+  illustrationBackground: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.l,
+    ...SHADOWS.large,
+  },
+  contentContainer: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xl,
+    width: '100%',
+  },
+  iconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.m,
+    ...SHADOWS.medium,
   },
   title: {
     fontSize: FONTS.h1,
@@ -264,10 +330,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
+  controls: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    alignItems: 'center',
+  },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: SPACING.l,
+    marginBottom: SPACING.xl,
   },
   dot: {
     width: 10,
@@ -282,8 +353,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDERS.radiusLarge,
-    marginBottom: SPACING.xxl,
-    alignSelf: 'center',
+    width: width * 0.75,
     ...SHADOWS.medium,
   },
   buttonText: {

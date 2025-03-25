@@ -14,13 +14,15 @@ import {
   SafeAreaView,
   Animated,
   Dimensions,
-  StatusBar // Added StatusBar import
+  StatusBar,
+  Keyboard
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI, API_URL } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,26 +32,69 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   
-  // Animation references
+  // Animation values
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(50)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
+  const logoTranslateY = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
+    // Set up keyboard listeners
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setKeyboardVisible(true);
+        // Shrink logo when keyboard shows
+        Animated.parallel([
+          Animated.timing(logoScale, {
+            toValue: 0.6,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoTranslateY, {
+            toValue: -50,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    );
+    
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        // Restore logo when keyboard hides
+        Animated.parallel([
+          Animated.timing(logoScale, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoTranslateY, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    );
+    
     // Clear any previous errors when component mounts
     setError('');
     
-    // Start animations - all using useNativeDriver: true for consistency
+    // Start entrance animations
     Animated.parallel([
       Animated.timing(fadeIn, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
       Animated.timing(slideUp, {
         toValue: 0,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
       Animated.spring(logoScale, {
@@ -59,6 +104,11 @@ const LoginScreen = ({ navigation }) => {
         useNativeDriver: true,
       })
     ]).start();
+    
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
   }, []);
 
   const validateForm = () => {
@@ -74,6 +124,11 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
+    // Haptic feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
     setError('');
     if (!validateForm()) return;
   
@@ -85,15 +140,25 @@ const LoginScreen = ({ navigation }) => {
       const response = await authAPI.login(username, password);
       console.log('Login response:', response.data);
       
-      // Just store auth data and App.js will handle navigation automatically
+      // Store auth data
       await AsyncStorage.setItem('token', response.data.token);
       await AsyncStorage.setItem('userType', response.data.user_type);
       await AsyncStorage.setItem('userId', response.data.user_id.toString());
       
-      // The App.js useEffect will detect the token and handle navigation
+      // Success haptic feedback
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      
       setLoading(false);
     } catch (error) {
       console.error('Login error:', error);
+      
+      // Error haptic feedback
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      
       // More specific error message based on error type
       if (!error.response && !error.request) {
         // Network error
@@ -121,7 +186,7 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleForgotPassword = () => {
-    // For now just show an alert, this could be expanded later
+    // For now just show an alert
     Alert.alert(
       'Reset Password',
       'A password reset feature will be available in a future update.'
@@ -132,16 +197,51 @@ const LoginScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       
+      {/* Background gradient */}
       <LinearGradient
         colors={[COLORS.primaryDark, COLORS.primary]}
         style={styles.headerBackground}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       />
+      
+      {/* Background shapes for visual interest */}
+      <View style={styles.backgroundShapes}>
+        <Animated.View 
+          style={[
+            styles.shape1, 
+            { 
+              opacity: fadeIn.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.6]
+              })
+            }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.shape2, 
+            { 
+              opacity: fadeIn.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.5]
+              })
+            }
+          ]} 
+        />
+      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo & App Name */}
           <Animated.View 
             style={[
               styles.logoContainer,
@@ -149,15 +249,20 @@ const LoginScreen = ({ navigation }) => {
                 opacity: fadeIn,
                 transform: [
                   { translateY: slideUp },
-                  { scale: logoScale }
+                  { scale: logoScale },
+                  { translateY: logoTranslateY }
                 ]
               }
             ]}
           >
+            <View style={styles.logoBadge}>
+              <Ionicons name="briefcase" size={50} color="white" />
+            </View>
             <Text style={styles.logoText}>SwipeHire</Text>
             <Text style={styles.tagline}>Find your perfect match</Text>
           </Animated.View>
           
+          {/* Login Form */}
           <Animated.View 
             style={[
               styles.formContainer,
@@ -184,6 +289,7 @@ const LoginScreen = ({ navigation }) => {
                 onChangeText={setUsername}
                 autoCapitalize="none"
                 autoCorrect={false}
+                returnKeyType="next"
               />
             </View>
             
@@ -196,6 +302,8 @@ const LoginScreen = ({ navigation }) => {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={secureTextEntry}
+                returnKeyType="go"
+                onSubmitEditing={handleLogin}
               />
               <TouchableOpacity
                 style={styles.eyeIcon}
@@ -220,6 +328,7 @@ const LoginScreen = ({ navigation }) => {
               style={styles.loginButton}
               onPress={handleLogin}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -233,28 +342,56 @@ const LoginScreen = ({ navigation }) => {
 
             <View style={styles.registerContainer}>
               <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Register')}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.registerLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>
             
-            {/* Debug button for testing - remove in production */}
+            {/* Debug section for development */}
             {__DEV__ && (
-              <TouchableOpacity 
-                style={styles.debugButton} 
-                onPress={async () => {
-                  try {
-                    await AsyncStorage.setItem('token', 'debug-token');
-                    await AsyncStorage.setItem('userType', 'job_seeker');
-                    await AsyncStorage.setItem('userId', '2');
-                    Alert.alert('Debug Mode', 'Logged in as job seeker');
-                  } catch (error) {
-                    Alert.alert('Debug Error', error.message);
-                  }
-                }}
-              >
-                <Text style={styles.debugButtonText}>Developer Login</Text>
-              </TouchableOpacity>
+              <View style={styles.debugContainer}>
+                <Text style={styles.debugHeader}>Quick Login (Development Only)</Text>
+                <View style={styles.debugButtonRow}>
+                  <TouchableOpacity 
+                    style={styles.debugButton} 
+                    onPress={async () => {
+                      try {
+                        setUsername('recruiter');
+                        setPassword('password123');
+                        await AsyncStorage.setItem('token', 'debug-token-recruiter');
+                        await AsyncStorage.setItem('userType', 'recruiter');
+                        await AsyncStorage.setItem('userId', '1');
+                      } catch (error) {
+                        Alert.alert('Debug Error', error.message);
+                      }
+                    }}
+                  >
+                    <Ionicons name="business-outline" size={16} color={COLORS.textSecondary} />
+                    <Text style={styles.debugButtonText}>As Recruiter</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.debugButton} 
+                    onPress={async () => {
+                      try {
+                        setUsername('jobseeker');
+                        setPassword('password123');
+                        await AsyncStorage.setItem('token', 'debug-token-jobseeker');
+                        await AsyncStorage.setItem('userType', 'job_seeker');
+                        await AsyncStorage.setItem('userId', '2');
+                      } catch (error) {
+                        Alert.alert('Debug Error', error.message);
+                      }
+                    }}
+                  >
+                    <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
+                    <Text style={styles.debugButtonText}>As Job Seeker</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
           </Animated.View>
         </ScrollView>
@@ -275,23 +412,69 @@ const styles = StyleSheet.create({
     right: 0,
     height: height * 0.4,
   },
+  backgroundShapes: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.4,
+    overflow: 'hidden',
+  },
+  shape1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'white',
+    top: -50,
+    right: -50,
+    opacity: 0.1,
+  },
+  shape2: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'white',
+    bottom: 20,
+    left: -30,
+    opacity: 0.1,
+  },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: SPACING.l,
+    paddingBottom: SPACING.xl,
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: height * 0.1,
+    marginTop: height * 0.12,
     marginBottom: height * 0.05,
+  },
+  logoBadge: {
+    width: 100,
+    height: 100,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
   logoText: {
     fontSize: 42,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: SPACING.s,
+    marginBottom: SPACING.xs,
   },
   tagline: {
     fontSize: FONTS.body,
@@ -299,7 +482,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     backgroundColor: 'white',
-    borderRadius: BORDERS.radiusMedium,
+    borderRadius: BORDERS.radiusLarge,
     paddingHorizontal: SPACING.l,
     paddingVertical: SPACING.xl,
     ...SHADOWS.large,
@@ -331,7 +514,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: 50,
+    height: 56,
     fontSize: FONTS.body,
     color: COLORS.text,
   },
@@ -353,6 +536,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    height: 56,
     ...SHADOWS.medium,
   },
   buttonIcon: {
@@ -377,17 +561,38 @@ const styles = StyleSheet.create({
     fontSize: FONTS.body,
     fontWeight: 'bold',
   },
-  // Debug styles - remove in production
-  debugButton: {
+  // Debug styles - only used in development
+  debugContainer: {
     marginTop: SPACING.xl,
-    backgroundColor: '#eee',
-    padding: SPACING.s,
+    padding: SPACING.m,
+    backgroundColor: 'rgba(0,0,0,0.03)',
     borderRadius: BORDERS.radiusMedium,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.accent,
+  },
+  debugHeader: {
+    fontSize: FONTS.caption,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  debugButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  debugButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: BORDERS.radiusMedium,
   },
   debugButtonText: {
-    color: '#666',
+    color: COLORS.textSecondary,
     fontSize: FONTS.caption,
+    marginLeft: 4,
   },
 });
 
