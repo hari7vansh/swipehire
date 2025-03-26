@@ -12,21 +12,17 @@ import {
   Vibration,
   StatusBar,
   SafeAreaView,
-  Platform,
-  Easing,
-  Pressable
+  Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, FontAwesome5, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { matchingAPI, jobsAPI } from '../services/api';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
 const ROTATION_ANGLE = 12; // Degrees to rotate when swiping
-const CARD_OPACITY = 0.9; // Secondary card opacity
 
 // Sample data for jobs and candidates
 const SAMPLE_JOBS = [
@@ -78,38 +74,6 @@ const SAMPLE_JOBS = [
       id: 3,
       company_name: "AppWorks Studios"
     }
-  },
-  {
-    id: 4,
-    title: "UX/UI Designer",
-    company: "Creative Solutions",
-    location: "New York, NY",
-    description: "Design beautiful and intuitive user experiences for our products. Work closely with developers to implement your designs.",
-    requirements: "Proficiency in design tools like Figma or Sketch. Portfolio showing UI/UX projects. Understanding of user-centered design principles.",
-    salary_min: 85000,
-    salary_max: 125000,
-    job_type: "full_time",
-    experience_level: "mid",
-    recruiter: {
-      id: 4,
-      company_name: "Creative Solutions"
-    }
-  },
-  {
-    id: 5,
-    title: "DevOps Engineer",
-    company: "CloudTech Services",
-    location: "Austin, TX",
-    description: "Manage our cloud infrastructure and CI/CD pipelines. Ensure reliability, performance, and security of our systems.",
-    requirements: "Experience with AWS, Docker, and Kubernetes. Knowledge of CI/CD practices and tools.",
-    salary_min: 110000,
-    salary_max: 160000,
-    job_type: "full_time",
-    experience_level: "senior",
-    recruiter: {
-      id: 5,
-      company_name: "CloudTech Services"
-    }
   }
 ];
 
@@ -143,36 +107,8 @@ const SAMPLE_CANDIDATES = [
     experience_years: 6,
     education: "BS Software Engineering, UC Berkeley",
     bio: "Full stack developer experienced in building complete web applications from frontend to backend."
-  },
-  {
-    id: 4,
-    first_name: "Emily",
-    last_name: "Taylor",
-    title: "UX/UI Designer",
-    skills: "Figma, Sketch, Adobe XD, HTML, CSS",
-    experience_years: 3,
-    education: "BFA Design, Rhode Island School of Design",
-    bio: "Designer focused on creating intuitive and beautiful user experiences."
-  },
-  {
-    id: 5,
-    first_name: "David",
-    last_name: "Miller",
-    title: "Mobile Developer",
-    skills: "React Native, Swift, Kotlin, Firebase",
-    experience_years: 4,
-    education: "BS Computer Science, University of Washington",
-    bio: "Mobile developer with experience in both native and cross-platform development."
   }
 ];
-
-// Use background gradient colors instead of images
-const BACKGROUND_COLORS = {
-  "tech": ['#2193b0', '#6dd5ed'],
-  "finance": ['#373B44', '#4286f4'],
-  "design": ['#834d9b', '#d04ed6'],
-  "default": ['#4b6cb7', '#182848'],
-};
 
 const SwipeScreen = ({ navigation }) => {
   // State
@@ -207,17 +143,17 @@ const SwipeScreen = ({ navigation }) => {
     outputRange: [1, 0.92, 1],
     extrapolate: 'clamp'
   });
-  const nextCardOpacity = position.x.interpolate({
-    inputRange: [-width / 2, 0, width / 2],
-    outputRange: [1, CARD_OPACITY, 1],
+  
+  // Card animation values - using transform instead of height
+  const expandAnim = useRef(new Animated.Value(0)).current;
+  const cardScaleY = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.25],
     extrapolate: 'clamp'
   });
-  
-  // Card animation values
-  const expandAnim = useRef(new Animated.Value(0)).current;
-  const cardHeight = expandAnim.interpolate({
+  const cardTranslateY = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [height * 0.68, height * 0.85],
+    outputRange: [0, -height * 0.08],
     extrapolate: 'clamp'
   });
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -357,19 +293,11 @@ const SwipeScreen = ({ navigation }) => {
     const xDestination = direction === 'right' ? width * 1.5 : -width * 1.5;
     
     // Animate swipe
-    Animated.parallel([
-      Animated.timing(position, {
-        toValue: { x: xDestination, y: direction === 'right' ? -60 : 60 },
-        duration: 400,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.exp)
-      }),
-      Animated.timing(contentOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true
-      })
-    ]).start(() => {
+    Animated.timing(position, {
+      toValue: { x: xDestination, y: direction === 'right' ? -60 : 60 },
+      duration: 400,
+      useNativeDriver: true
+    }).start(() => {
       // After animation completes
       handleSwipeComplete(direction);
     });
@@ -382,7 +310,7 @@ const SwipeScreen = ({ navigation }) => {
     // Record swipe action to API
     try {
       if (userType === 'job_seeker') {
-        const response = await matchingAPI.swipe({
+        await matchingAPI.swipe({
           direction,
           job_id: currentItem.id
         });
@@ -392,7 +320,7 @@ const SwipeScreen = ({ navigation }) => {
           setTimeout(() => showMatchAlert(currentItem), 500);
         }
       } else {
-        const response = await matchingAPI.swipe({
+        await matchingAPI.swipe({
           direction,
           job_seeker_id: currentItem.id,
           job_id: 1 // This would need to be dynamic in a real app
@@ -487,7 +415,7 @@ const SwipeScreen = ({ navigation }) => {
         Animated.timing(expandAnim, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: false
+          useNativeDriver: true
         }),
         Animated.timing(contentOpacity, {
           toValue: 1,
@@ -501,7 +429,7 @@ const SwipeScreen = ({ navigation }) => {
         Animated.timing(expandAnim, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: false
+          useNativeDriver: true
         }),
         Animated.timing(contentOpacity, {
           toValue: 0,
@@ -542,37 +470,9 @@ const SwipeScreen = ({ navigation }) => {
   };
 
   /* Render Functions */
-
-  // Render job card
   const renderJobCard = (job) => {
-    // Determine background colors based on company
-    const companyLower = job.company?.toLowerCase() || job.recruiter?.company_name?.toLowerCase() || '';
-    let backgroundColors = BACKGROUND_COLORS.default;
-    
-    if (companyLower.includes('tech') || companyLower.includes('data') || companyLower.includes('app')) {
-      backgroundColors = BACKGROUND_COLORS.tech;
-    } else if (companyLower.includes('creative') || companyLower.includes('design')) {
-      backgroundColors = BACKGROUND_COLORS.design;
-    } else if (companyLower.includes('finance') || companyLower.includes('bank')) {
-      backgroundColors = BACKGROUND_COLORS.finance;
-    }
-    
     return (
       <View style={styles.cardContent}>
-        {/* Background Gradient */}
-        <LinearGradient
-          colors={backgroundColors}
-          style={styles.cardBackground}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
-          style={styles.cardGradient}
-        />
-        
         {/* Card Header */}
         <Animated.View 
           style={[
@@ -580,7 +480,6 @@ const SwipeScreen = ({ navigation }) => {
             { opacity: contentOpacity }
           ]}
         >
-          {/* Company logo or initial */}
           <View style={styles.logoContainer}>
             <View style={styles.companyInitial}>
               <Text style={styles.initialText}>
@@ -593,7 +492,7 @@ const SwipeScreen = ({ navigation }) => {
             <Text style={styles.cardTitle}>{job.title}</Text>
             <Text style={styles.companyName}>{job.company || job.recruiter?.company_name}</Text>
             <View style={styles.locationWrapper}>
-              <Ionicons name="location-outline" size={16} color="#fff" />
+              <Ionicons name="location-outline" size={16} color="#666" />
               <Text style={styles.location}>
                 {job.location}
                 {job.is_remote && " • Remote"}
@@ -611,7 +510,7 @@ const SwipeScreen = ({ navigation }) => {
           <Ionicons 
             name={expanded ? "chevron-up" : "chevron-down"} 
             size={22} 
-            color="#fff" 
+            color="#666" 
           />
         </TouchableOpacity>
         
@@ -638,7 +537,7 @@ const SwipeScreen = ({ navigation }) => {
           
           {job.salary_min && job.salary_max && (
             <View style={styles.salaryContainer}>
-              <FontAwesome5 name="money-bill-wave" size={16} color={COLORS.accent} />
+              <MaterialIcons name="attach-money" size={18} color={COLORS.primary} />
               <Text style={styles.salary}>
                 ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}
               </Text>
@@ -752,7 +651,7 @@ const SwipeScreen = ({ navigation }) => {
               
               <View style={styles.detailInfoRow}>
                 <View style={styles.detailInfoItem}>
-                  <FontAwesome5 name="money-bill-wave" size={18} color={COLORS.primary} />
+                  <MaterialIcons name="attach-money" size={18} color={COLORS.primary} />
                   <View style={styles.detailInfoContent}>
                     <Text style={styles.detailInfoLabel}>Salary Range</Text>
                     <Text style={styles.detailInfoValue}>
@@ -777,15 +676,6 @@ const SwipeScreen = ({ navigation }) => {
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Requirements</Text>
               <Text style={styles.detailText}>{job.requirements}</Text>
-              
-              <Text style={styles.detailSectionTitle}>Skills Needed</Text>
-              <View style={styles.detailSkillContainer}>
-                {(job.skills_required || "JavaScript, React, HTML, CSS, Communication, Teamwork").split(',').map((skill, idx) => (
-                  <View style={styles.detailSkillBadge} key={idx}>
-                    <Text style={styles.detailSkillText}>{skill.trim()}</Text>
-                  </View>
-                ))}
-              </View>
             </View>
           )}
           
@@ -805,23 +695,8 @@ const SwipeScreen = ({ navigation }) => {
               <Text style={styles.detailSectionTitle}>About the Company</Text>
               <Text style={styles.detailText}>
                 {job.recruiter?.company_description || 
-                 `${job.company || job.recruiter?.company_name} is a leading company in the industry, dedicated to innovation and excellence. We pride ourselves on our commitment to quality and customer satisfaction.`}
+                 `${job.company || job.recruiter?.company_name} is a leading company in the industry, dedicated to innovation and excellence.`}
               </Text>
-              
-              <View style={styles.companyStats}>
-                <View style={styles.companyStatItem}>
-                  <Text style={styles.companyStatValue}>500+</Text>
-                  <Text style={styles.companyStatLabel}>Employees</Text>
-                </View>
-                <View style={styles.companyStatItem}>
-                  <Text style={styles.companyStatValue}>2010</Text>
-                  <Text style={styles.companyStatLabel}>Founded</Text>
-                </View>
-                <View style={styles.companyStatItem}>
-                  <Text style={styles.companyStatValue}>20+</Text>
-                  <Text style={styles.companyStatLabel}>Countries</Text>
-                </View>
-              </View>
             </View>
           )}
         </Animated.View>
@@ -833,20 +708,6 @@ const SwipeScreen = ({ navigation }) => {
   const renderCandidateCard = (candidate) => {
     return (
       <View style={styles.cardContent}>
-        {/* Background Gradient - subtle pattern for candidate */}
-        <LinearGradient
-          colors={BACKGROUND_COLORS.default}
-          style={styles.cardBackground}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
-          style={styles.cardGradient}
-        />
-        
         {/* Card Header */}
         <Animated.View 
           style={[
@@ -855,7 +716,6 @@ const SwipeScreen = ({ navigation }) => {
             { opacity: contentOpacity }
           ]}
         >
-          {/* Candidate profile image/initial */}
           <View style={styles.candidateImageContainer}>
             <View style={styles.candidateImagePlaceholder}>
               <Text style={styles.candidateInitialText}>{candidate.first_name.charAt(0)}</Text>
@@ -866,7 +726,7 @@ const SwipeScreen = ({ navigation }) => {
             <Text style={styles.cardTitle}>{candidate.first_name} {candidate.last_name}</Text>
             <Text style={styles.companyName}>{candidate.title}</Text>
             <View style={styles.locationWrapper}>
-              <MaterialIcons name="work-outline" size={16} color="#fff" />
+              <MaterialIcons name="work-outline" size={16} color="#666" />
               <Text style={styles.location}>
                 {candidate.experience_years} years experience
               </Text>
@@ -883,7 +743,7 @@ const SwipeScreen = ({ navigation }) => {
           <Ionicons 
             name={expanded ? "chevron-up" : "chevron-down"} 
             size={22} 
-            color="#fff" 
+            color="#666" 
           />
         </TouchableOpacity>
         
@@ -990,11 +850,6 @@ const SwipeScreen = ({ navigation }) => {
                   </View>
                 </View>
               </View>
-              
-              <Text style={styles.detailSectionTitle}>Looking For</Text>
-              <Text style={styles.detailText}>
-                {candidate.desired_position || "A challenging position where I can utilize my skills and experience to make a meaningful impact."}
-              </Text>
             </View>
           )}
           
@@ -1005,24 +860,6 @@ const SwipeScreen = ({ navigation }) => {
                 {candidate.skills.split(',').map((skill, idx) => (
                   <View style={styles.detailSkillBadge} key={idx}>
                     <Text style={styles.detailSkillText}>{skill.trim()}</Text>
-                  </View>
-                ))}
-              </View>
-              
-              <Text style={styles.detailSectionTitle}>Soft Skills</Text>
-              <View style={styles.detailSkillContainer}>
-                {["Communication", "Teamwork", "Problem Solving", "Time Management", "Adaptability"].map((skill, idx) => (
-                  <View style={[styles.detailSkillBadge, styles.softSkillBadge]} key={`soft-${idx}`}>
-                    <Text style={styles.detailSkillText}>{skill}</Text>
-                  </View>
-                ))}
-              </View>
-              
-              <Text style={styles.detailSectionTitle}>Languages</Text>
-              <View style={styles.detailSkillContainer}>
-                {["English (Native)", "Spanish (Intermediate)"].map((lang, idx) => (
-                  <View style={[styles.detailSkillBadge, styles.languageSkillBadge]} key={`lang-${idx}`}>
-                    <Text style={styles.detailSkillText}>{lang}</Text>
                   </View>
                 ))}
               </View>
@@ -1040,24 +877,6 @@ const SwipeScreen = ({ navigation }) => {
                   <Text style={styles.educationYear}>2015 - 2019</Text>
                 </View>
               </View>
-              
-              <Text style={styles.detailSectionTitle}>Certifications</Text>
-              <View style={styles.certContainer}>
-                <View style={styles.certItem}>
-                  <MaterialCommunityIcons name="certificate" size={24} color={COLORS.primary} />
-                  <View style={styles.certContent}>
-                    <Text style={styles.certName}>AWS Solutions Architect</Text>
-                    <Text style={styles.certIssuer}>Amazon Web Services</Text>
-                  </View>
-                </View>
-                <View style={styles.certItem}>
-                  <MaterialCommunityIcons name="certificate" size={24} color={COLORS.primary} />
-                  <View style={styles.certContent}>
-                    <Text style={styles.certName}>Professional Scrum Master</Text>
-                    <Text style={styles.certIssuer}>Scrum.org</Text>
-                  </View>
-                </View>
-              </View>
             </View>
           )}
         </Animated.View>
@@ -1070,11 +889,7 @@ const SwipeScreen = ({ navigation }) => {
     if (loading) {
       return (
         <View style={[styles.card, styles.loadingCard]}>
-          <LinearGradient
-            colors={[COLORS.primaryLight, COLORS.primary]}
-            style={[StyleSheet.absoluteFill, styles.loadingCardGradient]}
-          />
-          <ActivityIndicator size="large" color="white" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Finding your perfect matches...</Text>
         </View>
       );
@@ -1083,11 +898,7 @@ const SwipeScreen = ({ navigation }) => {
     if (refreshing) {
       return (
         <View style={[styles.card, styles.loadingCard]}>
-          <LinearGradient
-            colors={[COLORS.accent, COLORS.accentDark]}
-            style={[StyleSheet.absoluteFill, styles.loadingCardGradient]}
-          />
-          <ActivityIndicator size="large" color="white" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Refreshing...</Text>
         </View>
       );
@@ -1096,13 +907,7 @@ const SwipeScreen = ({ navigation }) => {
     if (currentIndex >= data.length) {
       return (
         <View style={[styles.card, styles.endOfCards]}>
-          <LinearGradient
-            colors={['#f8f9fa', '#e9ecef']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <Ionicons name="checkmark-circle-outline" size={96} color={COLORS.primary} />
+          <Ionicons name="checkmark-circle-outline" size={60} color={COLORS.primary} />
           <Text style={styles.endOfCardsText}>No more profiles</Text>
           <Text style={styles.endOfCardsSubtext}>
             You've seen all available {userType === 'job_seeker' ? 'jobs' : 'candidates'}.
@@ -1113,12 +918,6 @@ const SwipeScreen = ({ navigation }) => {
             onPress={refreshCards}
             activeOpacity={0.7}
           >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
             <Text style={styles.refreshButtonText}>Start Over</Text>
             <Ionicons name="refresh" size={20} color="white" style={{ marginLeft: 8 }} />
           </TouchableOpacity>
@@ -1137,9 +936,10 @@ const SwipeScreen = ({ navigation }) => {
             transform: [
               { translateX: position.x },
               { translateY: position.y },
-              { rotate }
+              { rotate },
+              { scaleY: cardScaleY },
+              { translateY: cardTranslateY }
             ],
-            height: cardHeight,
             zIndex: 2
           }
         ]}
@@ -1187,50 +987,25 @@ const SwipeScreen = ({ navigation }) => {
           styles.nextCard,
           {
             transform: [{ scale: nextCardScale }],
-            opacity: nextCardOpacity,
+            opacity: 0.7,
             zIndex: 1
           }
         ]}
       >
-        {userType === 'job_seeker' ? (
-          <View style={styles.nextCardContent}>
-            <LinearGradient
-              colors={BACKGROUND_COLORS.default}
-              style={styles.cardBackground}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-            <LinearGradient
-              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
-              style={styles.cardGradient}
-            />
-            <View style={styles.nextCardHeader}>
-              <Text style={styles.nextCardTitle}>{nextItem.title}</Text>
-              <Text style={styles.nextCardSubtitle}>
-                {nextItem.company || nextItem.recruiter?.company_name}
-              </Text>
-            </View>
+        <View style={styles.nextCardContent}>
+          <View style={styles.nextCardHeader}>
+            <Text style={styles.nextCardTitle}>
+              {userType === 'job_seeker' 
+                ? nextItem.title 
+                : `${nextItem.first_name} ${nextItem.last_name}`}
+            </Text>
+            <Text style={styles.nextCardSubtitle}>
+              {userType === 'job_seeker' 
+                ? (nextItem.company || nextItem.recruiter?.company_name)
+                : nextItem.title}
+            </Text>
           </View>
-        ) : (
-          <View style={styles.nextCardContent}>
-            <LinearGradient
-              colors={BACKGROUND_COLORS.default}
-              style={styles.cardBackground}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-            <LinearGradient
-              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
-              style={styles.cardGradient}
-            />
-            <View style={styles.nextCardHeader}>
-              <Text style={styles.nextCardTitle}>
-                {nextItem.first_name} {nextItem.last_name}
-              </Text>
-              <Text style={styles.nextCardSubtitle}>{nextItem.title}</Text>
-            </View>
-          </View>
-        )}
+        </View>
       </Animated.View>
     );
   };
@@ -1246,12 +1021,6 @@ const SwipeScreen = ({ navigation }) => {
         </Text>
         
         <View style={styles.headerButtons}>
-          <TouchableOpacity 
-            style={styles.filterButton}
-            onPress={() => Alert.alert('Coming Soon', 'Filters will be available in a future update.')}
-          >
-            <Ionicons name="options-outline" size={24} color="#333" />
-          </TouchableOpacity>
           <TouchableOpacity 
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
@@ -1329,7 +1098,7 @@ const SwipeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F9FAFB',
   },
   header: {
     flexDirection: 'row',
@@ -1340,28 +1109,21 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    ...SHADOWS.small
+    borderBottomColor: '#E5E7EB',
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: '#333333',
   },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  filterButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.background,
-    marginRight: 10,
-  },
   profileButton: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F0F4F8',
   },
   cardContainer: {
     flex: 1,
@@ -1371,58 +1133,49 @@ const styles = StyleSheet.create({
   },
   card: {
     position: 'absolute',
-    width: width * 0.92,
+    width: width * 0.9,
     height: height * 0.68,
     backgroundColor: 'white',
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: 'hidden',
-    ...SHADOWS.large,
-  },
-  cardBackground: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  cardGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 180,
-    zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   cardContent: {
     flex: 1,
-    borderRadius: 24,
+    borderRadius: 16,
     backgroundColor: 'white',
     overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 35,
-    zIndex: 2,
+    padding: 16,
+    paddingTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   candidateHeader: {
-    paddingTop: 40,
+    paddingTop: 20,
     alignItems: 'flex-start', 
   },
   logoContainer: {
     marginRight: 15,
   },
   companyInitial: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
   },
   initialText: {
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -1430,17 +1183,15 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   candidateImagePlaceholder: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: COLORS.secondary,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
   },
   candidateInitialText: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -1448,20 +1199,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    color: '#333333',
     marginBottom: 4,
   },
   companyName: {
-    fontSize: 18,
-    color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 16,
+    color: '#666666',
     marginBottom: 6,
   },
   expandButton: {
@@ -1469,10 +1214,10 @@ const styles = StyleSheet.create({
     top: 15,
     right: 15,
     zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F0F4F8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1482,15 +1227,12 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 14,
-    color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    color: '#666666',
     marginLeft: 4,
   },
   cardBody: {
     flex: 1,
-    padding: 20,
+    padding: 16,
     paddingTop: 10,
   },
   section: {
@@ -1500,25 +1242,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: COLORS.primary,
+    color: '#333333',
   },
   description: {
-    fontSize: 15,
-    color: COLORS.text,
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 20,
   },
   salaryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: '#F0F4F8',
     padding: 12,
     borderRadius: 12,
     marginVertical: 8,
   },
   salary: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.accent,
+    color: '#333333',
     marginLeft: 10,
   },
   skillsContainer: {
@@ -1527,56 +1269,54 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   skillBadge: {
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
-    paddingHorizontal: 12,
+    backgroundColor: '#F0F4F8',
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(25, 118, 210, 0.2)',
+    borderColor: '#E5E7EB',
   },
   skillBadgeText: {
-    color: COLORS.primary,
-    fontSize: 13,
+    color: '#333333',
+    fontSize: 12,
     fontWeight: '500',
   },
   cardFooter: {
-    padding: 15,
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: '#E5E7EB',
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   tag: {
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F0F4F8',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     marginRight: 10,
     marginBottom: 5,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   tagText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: '#666666',
     fontWeight: '500',
   },
   detailedContent: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     zIndex: 5,
   },
   detailTabContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: '#E5E7EB',
   },
   detailTab: {
     paddingVertical: 10,
@@ -1588,8 +1328,8 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.primary,
   },
   detailTabText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
+    fontSize: 14,
+    color: '#666666',
   },
   activeDetailTabText: {
     color: COLORS.primary,
@@ -1599,16 +1339,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailSectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: '#333333',
     marginBottom: 10,
     marginTop: 16,
   },
   detailText: {
-    fontSize: 16,
-    color: COLORS.text,
-    lineHeight: 24,
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 20,
     marginBottom: 15,
   },
   detailInfoRow: {
@@ -1620,7 +1360,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    backgroundColor: 'rgba(240, 240, 240, 0.5)',
+    backgroundColor: '#F0F4F8',
     borderRadius: 10,
     padding: 10,
     marginHorizontal: 5,
@@ -1630,12 +1370,12 @@ const styles = StyleSheet.create({
   },
   detailInfoLabel: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: '#666666',
   },
   detailInfoValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.text,
+    color: '#333333',
   },
   detailSkillContainer: {
     flexDirection: 'row',
@@ -1643,25 +1383,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   detailSkillBadge: {
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
-    paddingHorizontal: 14,
+    backgroundColor: '#F0F4F8',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(25, 118, 210, 0.2)',
-  },
-  softSkillBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.08)',
-    borderColor: 'rgba(76, 175, 80, 0.2)',
-  },
-  languageSkillBadge: {
-    backgroundColor: 'rgba(156, 39, 176, 0.08)',
-    borderColor: 'rgba(156, 39, 176, 0.2)',
+    borderColor: '#E5E7EB',
   },
   detailSkillText: {
-    color: COLORS.text,
+    color: '#333333',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1674,43 +1406,22 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   companyDetailInitial: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   companyDetailInitialText: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
   },
   companyDetailName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  companyStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(240, 240, 240, 0.5)',
-    borderRadius: 16,
-    padding: 15,
-    marginTop: 20,
-  },
-  companyStatItem: {
-    alignItems: 'center',
-  },
-  companyStatValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  companyStatLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
+    color: '#333333',
   },
   educationItem: {
     flexDirection: 'row',
@@ -1730,67 +1441,38 @@ const styles = StyleSheet.create({
   educationDegree: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: '#333333',
   },
   educationSchool: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: '#666666',
     marginVertical: 2,
   },
   educationYear: {
     fontSize: 12,
-    color: COLORS.textLight,
-  },
-  certContainer: {
-    marginTop: 5,
-  },
-  certItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(240, 240, 240, 0.5)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-  },
-  certContent: {
-    marginLeft: 10,
-  },
-  certName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  certIssuer: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    color: '#999999',
   },
   nextCard: {
     top: 10,
+    backgroundColor: '#FFFFFF',
   },
   nextCardContent: {
     flex: 1,
     justifyContent: 'flex-start',
   },
   nextCardHeader: {
-    padding: 25,
-    paddingTop: 40,
-    zIndex: 2,
+    padding: 20,
+    paddingTop: 30,
   },
   nextCardTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    color: '#333333',
     marginBottom: 6,
   },
   nextCardSubtitle: {
-    fontSize: 16,
-    color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 14,
+    color: '#666666',
   },
   swipeIndicator: {
     position: 'absolute',
@@ -1801,11 +1483,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     transform: [{ rotate: '-30deg' }],
-    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+    elevation: 5,
   },
   likeIndicator: {
     borderColor: '#4CAF50',
@@ -1833,20 +1515,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    ...SHADOWS.small
+    borderTopColor: '#E5E7EB',
   },
   buttonWrapper: {
     // Empty wrapper for button scale animations
   },
   button: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     margin: 10,
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   buttonLeft: {
     backgroundColor: '#FF5252',
@@ -1855,10 +1540,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#D32F2F',
   },
   buttonMiddle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.primaryLight,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#9E9E9E',
   },
   buttonRight: {
     backgroundColor: '#4CAF50',
@@ -1869,14 +1554,12 @@ const styles = StyleSheet.create({
   loadingCard: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 24,
-  },
-  loadingCardGradient: {
-    borderRadius: 24,
+    borderRadius: 16,
+    backgroundColor: 'white',
   },
   loadingText: {
-    fontSize: 18,
-    color: 'white',
+    fontSize: 16,
+    color: '#666666',
     fontWeight: '500',
     marginTop: 20,
   },
@@ -1884,17 +1567,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    borderRadius: 24,
+    borderRadius: 16,
+    backgroundColor: 'white',
   },
   endOfCardsText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: '#333333',
     marginVertical: 15,
   },
   endOfCardsSubtext: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: '#666666',
     textAlign: 'center',
     marginBottom: 30,
     paddingHorizontal: 20,
@@ -1904,11 +1588,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 24,
-    ...SHADOWS.medium,
-    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   refreshButtonText: {
     color: 'white',

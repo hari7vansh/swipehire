@@ -1,26 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
+import React, { useState, useEffect, useRef } from 'react';
+import {
   View, 
   Text, 
   TextInput, 
   TouchableOpacity, 
   StyleSheet, 
   Alert,
-  ScrollView,
-  Switch,
   ActivityIndicator,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  SafeAreaView,
   Animated,
   Dimensions,
-  StatusBar
+  StatusBar,
+  Keyboard
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { authAPI } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import { COLORS } from '../theme';
 import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
@@ -46,43 +45,33 @@ const RegisterScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
   
   // Animation references
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(50)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
   
-  // Animation for steps
-  const slideInRight = useRef(new Animated.Value(width)).current;
-  const slideOutLeft = useRef(new Animated.Value(0)).current;
-  
-  // Progress indicator animation
-  const progressWidth = useRef(new Animated.Value(0)).current;
-  const progressValue = progressWidth.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0%", "100%"]
-  });
+  // Refs for TextInput focus
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const firstNameRef = useRef(null);
+  const lastNameRef = useRef(null);
+  const companyNameRef = useRef(null);
+  const positionRef = useRef(null);
   
   useEffect(() => {
-    // Update progress based on step
-    Animated.timing(progressWidth, {
-      toValue: currentStep === 1 ? 0.5 : 1,
-      duration: 300,
-      useNativeDriver: false
-    }).start();
-    
     // Start entrance animations
     Animated.parallel([
-      Animated.timing(fadeIn, {
+      Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 500,
         useNativeDriver: true,
       }),
-      Animated.timing(slideUp, {
+      Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 800,
+        duration: 500,
         useNativeDriver: true,
       })
     ]).start();
-  }, [currentStep]);
-  
+  }, []);
+
   const nextStep = () => {
     if (currentStep === 1) {
       if (!validateStep1()) return;
@@ -91,25 +80,24 @@ const RegisterScreen = ({ navigation }) => {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    }
-    
-    // Animate step transition
-    Animated.parallel([
-      Animated.timing(slideOutLeft, {
-        toValue: -width,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideInRight, {
+      
+      // Hide keyboard
+      Keyboard.dismiss();
+
+      // Animate step transition
+      Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      })
-    ]).start(() => {
-      setCurrentStep(2);
-      slideOutLeft.setValue(0);
-      slideInRight.setValue(width);
-    });
+        duration: 200,
+        useNativeDriver: true
+      }).start(() => {
+        setCurrentStep(2);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true
+        }).start();
+      });
+    }
   };
   
   const prevStep = () => {
@@ -118,22 +106,21 @@ const RegisterScreen = ({ navigation }) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Animate step transition (reverse)
-    Animated.parallel([
-      Animated.timing(slideOutLeft, {
-        toValue: width,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideInRight, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      })
-    ]).start(() => {
+    // Hide keyboard
+    Keyboard.dismiss();
+    
+    // Animate step transition
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true
+    }).start(() => {
       setCurrentStep(1);
-      slideOutLeft.setValue(0);
-      slideInRight.setValue(width);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }).start();
     });
   };
   
@@ -142,6 +129,9 @@ const RegisterScreen = ({ navigation }) => {
       ...prevState,
       [name]: value
     }));
+    
+    // Clear error when user starts typing
+    if (error) setError('');
   };
   
   const toggleUserType = () => {
@@ -228,8 +218,6 @@ const RegisterScreen = ({ navigation }) => {
             text: "OK", 
             onPress: () => {
               // The app will detect the token and navigate to the main screen
-              // We'll navigate back to Login which will trigger the App.js useEffect
-              // to check for the token and redirect to Main
               navigation.navigate('Login');
             }
           }
@@ -250,29 +238,24 @@ const RegisterScreen = ({ navigation }) => {
   };
   
   const renderStep1 = () => (
-    <Animated.View
-      style={[
-        styles.stepContainer,
-        {
-          transform: [{ translateX: slideOutLeft }],
-        },
-      ]}
-    >
+    <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Create Account</Text>
       <Text style={styles.stepDescription}>Enter your basic information to get started</Text>
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Username *</Text>
         <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+          <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
             placeholder="Choose a username"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor="#999"
             value={formData.username}
             onChangeText={value => handleChange('username', value)}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => emailRef.current?.focus()}
           />
         </View>
       </View>
@@ -280,16 +263,19 @@ const RegisterScreen = ({ navigation }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Email *</Text>
         <View style={styles.inputContainer}>
-          <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+          <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
+            ref={emailRef}
             style={styles.input}
             placeholder="Your email address"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor="#999"
             value={formData.email}
             onChangeText={value => handleChange('email', value)}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
         </View>
       </View>
@@ -297,14 +283,16 @@ const RegisterScreen = ({ navigation }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Password *</Text>
         <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+          <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
+            ref={passwordRef}
             style={styles.input}
             placeholder="Choose a password (min 6 characters)"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor="#999"
             value={formData.password}
             onChangeText={value => handleChange('password', value)}
             secureTextEntry={secureTextEntry}
+            returnKeyType="done"
           />
           <TouchableOpacity
             style={styles.eyeIcon}
@@ -313,7 +301,7 @@ const RegisterScreen = ({ navigation }) => {
             <Ionicons
               name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
               size={20}
-              color={COLORS.textSecondary}
+              color="#666"
             />
           </TouchableOpacity>
         </View>
@@ -326,27 +314,31 @@ const RegisterScreen = ({ navigation }) => {
             <MaterialCommunityIcons 
               name="briefcase-search" 
               size={20} 
-              color={!isRecruiter ? COLORS.primary : COLORS.textSecondary} 
+              color={!isRecruiter ? COLORS.primary : "#666"} 
             />
             <Text style={isRecruiter ? styles.userTypeInactive : styles.userTypeActive}>
               Job Seeker
             </Text>
           </View>
           
-          <Switch
-            value={isRecruiter}
-            onValueChange={toggleUserType}
-            trackColor={{ false: COLORS.primary, true: COLORS.accent }}
-            thumbColor="white"
-            ios_backgroundColor={COLORS.primary}
-            style={styles.switch}
-          />
+          <TouchableOpacity 
+            style={styles.toggleContainer}
+            onPress={toggleUserType}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.toggle, isRecruiter && styles.toggleActive]}>
+              <Animated.View style={[
+                styles.toggleCircle,
+                { transform: [{ translateX: isRecruiter ? 20 : 0 }] }
+              ]} />
+            </View>
+          </TouchableOpacity>
           
           <View style={[styles.userTypeOption, isRecruiter && styles.activeOption]}>
             <MaterialCommunityIcons 
               name="account-tie" 
               size={20} 
-              color={isRecruiter ? COLORS.accent : COLORS.textSecondary} 
+              color={isRecruiter ? COLORS.primary : "#666"} 
             />
             <Text style={isRecruiter ? styles.userTypeActive : styles.userTypeInactive}>
               Recruiter
@@ -360,31 +352,14 @@ const RegisterScreen = ({ navigation }) => {
         onPress={nextStep}
         activeOpacity={0.8}
       >
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
         <Text style={styles.nextButtonText}>Next</Text>
         <Ionicons name="arrow-forward" size={20} color="white" />
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
   
   const renderStep2 = () => (
-    <Animated.View
-      style={[
-        styles.stepContainer,
-        {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          transform: [{ translateX: currentStep === 1 ? slideInRight : 0 }],
-        },
-      ]}
-    >
+    <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Profile Details</Text>
       <Text style={styles.stepDescription}>
         {isRecruiter 
@@ -395,13 +370,16 @@ const RegisterScreen = ({ navigation }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>First Name</Text>
         <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+          <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
+            ref={firstNameRef}
             style={styles.input}
             placeholder="Your first name"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor="#999"
             value={formData.first_name}
             onChangeText={value => handleChange('first_name', value)}
+            returnKeyType="next"
+            onSubmitEditing={() => lastNameRef.current?.focus()}
           />
         </View>
       </View>
@@ -409,13 +387,18 @@ const RegisterScreen = ({ navigation }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Last Name</Text>
         <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+          <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
+            ref={lastNameRef}
             style={styles.input}
             placeholder="Your last name"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor="#999"
             value={formData.last_name}
             onChangeText={value => handleChange('last_name', value)}
+            returnKeyType={isRecruiter ? "next" : "done"}
+            onSubmitEditing={() => {
+              if (isRecruiter) companyNameRef.current?.focus();
+            }}
           />
         </View>
       </View>
@@ -425,13 +408,16 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Company Name *</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
+                ref={companyNameRef}
                 style={styles.input}
                 placeholder="Your company's name"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor="#999"
                 value={formData.company_name}
                 onChangeText={value => handleChange('company_name', value)}
+                returnKeyType="next"
+                onSubmitEditing={() => positionRef.current?.focus()}
               />
             </View>
           </View>
@@ -439,11 +425,12 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Your Position *</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="briefcase-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="briefcase-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
+                ref={positionRef}
                 style={styles.input}
                 placeholder="Your role at the company"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor="#999"
                 value={formData.position}
                 onChangeText={value => handleChange('position', value)}
               />
@@ -455,13 +442,14 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Skills</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="code-working-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="code-working-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Skills (comma separated)"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor="#999"
                 value={formData.skills}
                 onChangeText={value => handleChange('skills', value)}
+                returnKeyType="done"
               />
             </View>
           </View>
@@ -469,11 +457,11 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Years of Experience</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="time-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Years of work experience"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor="#999"
                 value={formData.experience_years}
                 onChangeText={value => handleChange('experience_years', value)}
                 keyboardType="numeric"
@@ -499,12 +487,6 @@ const RegisterScreen = ({ navigation }) => {
           disabled={loading}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={[COLORS.accent, COLORS.accentDark]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          />
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
@@ -515,20 +497,12 @@ const RegisterScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
   
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      
-      {/* Background gradient */}
-      <LinearGradient
-        colors={[COLORS.primaryDark, COLORS.primary]}
-        style={styles.headerBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      <StatusBar barStyle="dark-content" />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -545,7 +519,7 @@ const RegisterScreen = ({ navigation }) => {
               style={styles.backButtonTop}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="arrow-back" size={24} color="white" />
+              <Ionicons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Sign Up</Text>
           </View>
@@ -553,21 +527,14 @@ const RegisterScreen = ({ navigation }) => {
           {/* Progress bar */}
           <View style={styles.progressContainer}>
             <View style={styles.progressTrack}>
-              <Animated.View 
-                style={[
-                  styles.progressFill,
-                  {
-                    width: progressValue
-                  }
-                ]} 
-              />
+              <View style={[styles.progressFill, { width: currentStep === 1 ? '50%' : '100%' }]} />
             </View>
             <View style={styles.stepsIndicator}>
               <View style={[styles.stepDot, styles.activeStep]}>
                 <Text style={styles.stepNumber}>1</Text>
               </View>
               <View style={styles.stepLine} />
-              <View style={[styles.stepDot, currentStep >= 2 && styles.activeStep]}>
+              <View style={[styles.stepDot, currentStep === 2 && styles.activeStep]}>
                 <Text style={styles.stepNumber}>2</Text>
               </View>
             </View>
@@ -577,8 +544,8 @@ const RegisterScreen = ({ navigation }) => {
             style={[
               styles.formContainer,
               {
-                opacity: fadeIn,
-                transform: [{ translateY: slideUp }],
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
               },
             ]}
           >
@@ -589,10 +556,7 @@ const RegisterScreen = ({ navigation }) => {
               </View>
             ) : null}
             
-            <View style={styles.stepsContainer}>
-              {renderStep1()}
-              {currentStep === 2 && renderStep2()}
-            </View>
+            {currentStep === 1 ? renderStep1() : renderStep2()}
             
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account? </Text>
@@ -613,57 +577,49 @@ const RegisterScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.3,
+    backgroundColor: '#F9FAFB',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: SPACING.xl,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.l,
-    paddingTop: Platform.OS === 'ios' ? SPACING.l : StatusBar.currentHeight + SPACING.m,
-    paddingBottom: SPACING.m,
+    paddingTop: Platform.OS === 'ios' ? 10 : 20,
+    paddingBottom: 16,
   },
   backButtonTop: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#F0F4F8',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.m,
+    marginRight: 16,
   },
   headerTitle: {
-    fontSize: FONTS.h2,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#333',
   },
   progressContainer: {
-    paddingHorizontal: SPACING.l,
-    marginBottom: SPACING.l,
+    marginBottom: 24,
   },
   progressTrack: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#E5E7EB',
     borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: SPACING.m,
+    marginBottom: 16,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: 'white',
+    backgroundColor: COLORS.primary,
     borderRadius: 3,
   },
   stepsIndicator: {
@@ -674,206 +630,227 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   activeStep: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.primary,
   },
   stepNumber: {
-    color: COLORS.primary,
+    color: 'white',
     fontWeight: 'bold',
+    fontSize: 14,
   },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: SPACING.s,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 8,
   },
   formContainer: {
-    flex: 1,
     backgroundColor: 'white',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: SPACING.l,
-    paddingTop: SPACING.l,
-    paddingBottom: SPACING.m,
-    ...SHADOWS.large,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.error,
-    padding: SPACING.m,
-    borderRadius: BORDERS.radiusMedium,
-    marginBottom: SPACING.m,
+    backgroundColor: '#F44336',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
   errorText: {
     color: 'white',
-    marginLeft: SPACING.s,
+    marginLeft: 8,
     flex: 1,
-  },
-  stepsContainer: {
-    position: 'relative',
-    minHeight: 400, // Adjust based on content
   },
   stepContainer: {
     width: '100%',
   },
   stepTitle: {
-    fontSize: FONTS.h2,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
+    color: '#333',
+    marginBottom: 8,
   },
   stepDescription: {
-    fontSize: FONTS.body,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.l,
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: SPACING.m,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: FONTS.label,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
-    marginLeft: SPACING.xs,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDERS.radiusMedium,
-    backgroundColor: COLORS.background,
-    ...SHADOWS.small,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
   },
   inputIcon: {
-    padding: SPACING.m,
+    padding: 12,
   },
   input: {
     flex: 1,
-    height: 54,
-    fontSize: FONTS.body,
-    color: COLORS.text,
+    height: 48,
+    fontSize: 16,
+    color: '#333',
   },
   eyeIcon: {
-    padding: SPACING.m,
+    padding: 12,
   },
   userTypeContainer: {
-    marginBottom: SPACING.l,
+    marginBottom: 24,
   },
   userTypeLabel: {
-    fontSize: FONTS.label,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.s,
-    marginLeft: SPACING.xs,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 10,
   },
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.background,
-    padding: SPACING.m,
-    borderRadius: BORDERS.radiusMedium,
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    ...SHADOWS.small,
+    borderColor: '#E5E7EB',
   },
   userTypeOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.s,
-    borderRadius: BORDERS.radiusMedium,
-    flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   activeOption: {
     backgroundColor: 'rgba(25, 118, 210, 0.1)',
   },
   userTypeActive: {
-    fontSize: FONTS.body,
+    fontSize: 15,
     fontWeight: 'bold',
-    color: COLORS.text,
-    marginLeft: SPACING.xs,
+    color: '#333',
+    marginLeft: 8,
   },
   userTypeInactive: {
-    fontSize: FONTS.body,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
+    fontSize: 15,
+    color: '#666',
+    marginLeft: 8,
   },
-  switch: {
-    transform: [{ scale: 1.1 }],
-    marginHorizontal: SPACING.m,
+  toggleContainer: {
+    marginHorizontal: 16,
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  toggleActive: {
+    backgroundColor: 'rgba(25, 118, 210, 0.4)',
+  },
+  toggleCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
   },
   nextButton: {
-    borderRadius: BORDERS.radiusMedium,
-    padding: SPACING.m,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    padding: 14,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    height: 56,
-    overflow: 'hidden',
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   nextButtonText: {
     color: 'white',
-    fontSize: FONTS.body,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginRight: SPACING.s,
+    marginRight: 8,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: SPACING.m,
+    marginTop: 16,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: SPACING.m,
-    borderWidth: 2,
+    padding: 14,
+    borderWidth: 1.5,
     borderColor: COLORS.primary,
-    borderRadius: BORDERS.radiusMedium,
+    borderRadius: 8,
     width: '30%',
   },
   backButtonText: {
     color: COLORS.primary,
-    fontSize: FONTS.body,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginLeft: SPACING.xs,
+    marginLeft: 8,
   },
   registerButton: {
-    borderRadius: BORDERS.radiusMedium,
-    padding: SPACING.m,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    overflow: 'hidden',
     width: '65%',
-    height: 56,
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   registerButtonText: {
     color: 'white',
-    fontSize: FONTS.body,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginRight: SPACING.xs,
+    marginRight: 8,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: SPACING.xl,
+    marginTop: 24,
   },
   footerText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.body,
+    color: '#666',
+    fontSize: 15,
   },
   footerLink: {
     color: COLORS.primary,
-    fontSize: FONTS.body,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });

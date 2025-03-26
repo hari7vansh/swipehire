@@ -5,8 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -16,13 +14,12 @@ import {
   Dimensions,
   StatusBar,
   Keyboard,
-  Vibration
+  Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI, API_URL } from '../services/api';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
+import { authAPI } from '../services/api';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SPACING } from '../theme';
 import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
@@ -36,15 +33,9 @@ const LoginScreen = ({ navigation }) => {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   
   // Animation values
-  const fadeIn = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(40)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
-  const logoTranslateY = useRef(new Animated.Value(0)).current;
-  
-  // Animation for background shapes
-  const shape1Position = useRef(new Animated.ValueXY({ x: -50, y: -50 })).current;
-  const shape2Position = useRef(new Animated.ValueXY({ x: width, y: 100 })).current;
-  const shape3Position = useRef(new Animated.ValueXY({ x: width/2, y: height/3 })).current;
   
   // Refs for TextInput focus
   const passwordRef = useRef(null);
@@ -56,18 +47,11 @@ const LoginScreen = ({ navigation }) => {
       () => {
         setKeyboardVisible(true);
         // Shrink logo when keyboard shows
-        Animated.parallel([
-          Animated.timing(logoScale, {
-            toValue: 0.6,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(logoTranslateY, {
-            toValue: -40,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start();
+        Animated.timing(logoScale, {
+          toValue: 0.7,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
       }
     );
     
@@ -76,18 +60,11 @@ const LoginScreen = ({ navigation }) => {
       () => {
         setKeyboardVisible(false);
         // Restore logo when keyboard hides
-        Animated.parallel([
-          Animated.timing(logoScale, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(logoTranslateY, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start();
+        Animated.timing(logoScale, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
       }
     );
     
@@ -96,7 +73,7 @@ const LoginScreen = ({ navigation }) => {
     
     // Start entrance animations
     Animated.parallel([
-      Animated.timing(fadeIn, {
+      Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
         useNativeDriver: true,
@@ -111,71 +88,14 @@ const LoginScreen = ({ navigation }) => {
         friction: 7,
         tension: 40,
         useNativeDriver: true,
-      }),
-      // Animate background shapes
-      Animated.spring(shape1Position, {
-        toValue: { x: -30, y: -30 },
-        friction: 7,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.spring(shape2Position, {
-        toValue: { x: width - 100, y: 120 },
-        friction: 7,
-        tension: 30,
-        useNativeDriver: true,
-      }),
-      Animated.spring(shape3Position, {
-        toValue: { x: width/4, y: height/3 - 50 },
-        friction: 7,
-        tension: 20,
-        useNativeDriver: true,
       })
     ]).start();
-    
-    // Start floating animation for shapes
-    startFloatingAnimation();
     
     return () => {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
   }, []);
-  
-  // Floating animation for background shapes
-  const startFloatingAnimation = () => {
-    const createFloatAnimation = (shapePosition, offsetX, offsetY, duration) => {
-      return Animated.sequence([
-        Animated.timing(shapePosition, {
-          toValue: { 
-            x: shapePosition.x._value + offsetX, 
-            y: shapePosition.y._value + offsetY 
-          },
-          duration: duration,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shapePosition, {
-          toValue: { 
-            x: shapePosition.x._value, 
-            y: shapePosition.y._value 
-          },
-          duration: duration,
-          useNativeDriver: true,
-        })
-      ]);
-    };
-    
-    // Create infinite floating animation
-    const floatingLoop = () => {
-      Animated.parallel([
-        createFloatAnimation(shape1Position, 10, 15, 3000),
-        createFloatAnimation(shape2Position, -15, 10, 4000),
-        createFloatAnimation(shape3Position, 5, -10, 3500)
-      ]).start(() => floatingLoop());
-    };
-    
-    floatingLoop();
-  };
 
   const validateForm = () => {
     if (!username.trim()) {
@@ -193,8 +113,6 @@ const LoginScreen = ({ navigation }) => {
     // Haptic feedback
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else {
-      Vibration.vibrate(30);
     }
     
     setError('');
@@ -202,9 +120,6 @@ const LoginScreen = ({ navigation }) => {
   
     setLoading(true);
     try {
-      console.log('Attempting login with:', username);
-      console.log('API URL:', API_URL);
-      
       const response = await authAPI.login(username, password);
       
       // Store auth data
@@ -267,64 +182,7 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      
-      {/* Background gradient */}
-      <LinearGradient
-        colors={[COLORS.primaryDark, COLORS.primary]}
-        style={styles.headerBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      
-      {/* Background shapes for visual interest */}
-      <View style={styles.backgroundShapes}>
-        <Animated.View 
-          style={[
-            styles.shape1, 
-            { 
-              opacity: fadeIn.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.7]
-              }),
-              transform: [
-                { translateX: shape1Position.x },
-                { translateY: shape1Position.y }
-              ]
-            }
-          ]} 
-        />
-        <Animated.View 
-          style={[
-            styles.shape2, 
-            { 
-              opacity: fadeIn.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.6]
-              }),
-              transform: [
-                { translateX: shape2Position.x },
-                { translateY: shape2Position.y }
-              ]
-            }
-          ]} 
-        />
-        <Animated.View 
-          style={[
-            styles.shape3, 
-            { 
-              opacity: fadeIn.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.4]
-              }),
-              transform: [
-                { translateX: shape3Position.x },
-                { translateY: shape3Position.y }
-              ]
-            }
-          ]} 
-        />
-      </View>
+      <StatusBar barStyle="dark-content" />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -341,23 +199,17 @@ const LoginScreen = ({ navigation }) => {
             style={[
               styles.logoContainer,
               {
-                opacity: fadeIn,
+                opacity: fadeAnim,
                 transform: [
                   { translateY: slideUp },
-                  { scale: logoScale },
-                  { translateY: logoTranslateY }
+                  { scale: logoScale }
                 ]
               }
             ]}
           >
-            <LinearGradient
-              colors={['rgba(255,255,255,0.8)', 'rgba(255,255,255,0.2)']}
-              style={styles.logoBadge}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <FontAwesome5 name="briefcase" size={50} color={COLORS.primary} />
-            </LinearGradient>
+            <View style={styles.logoCircle}>
+              <Ionicons name="briefcase" size={50} color={COLORS.primary} />
+            </View>
             <Text style={styles.logoText}>SwipeHire</Text>
             <Text style={styles.tagline}>Find your perfect match</Text>
           </Animated.View>
@@ -367,7 +219,7 @@ const LoginScreen = ({ navigation }) => {
             style={[
               styles.formContainer,
               {
-                opacity: fadeIn,
+                opacity: fadeAnim,
                 transform: [{ translateY: slideUp }]
               }
             ]}
@@ -379,17 +231,17 @@ const LoginScreen = ({ navigation }) => {
               </View>
             ) : null}
             
-            <Text style={styles.formTitle}>Welcome Back</Text>
-            <Text style={styles.formSubtitle}>Sign in to your account</Text>
+            <Text style={styles.formTitle}>Sign In</Text>
+            <Text style={styles.formSubtitle}>Welcome back to SwipeHire</Text>
             
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Username</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={22} color="#666" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your username"
-                  placeholderTextColor={COLORS.placeholder}
+                  placeholderTextColor="#999"
                   value={username}
                   onChangeText={setUsername}
                   autoCapitalize="none"
@@ -403,12 +255,12 @@ const LoginScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={22} color="#666" style={styles.inputIcon} />
                 <TextInput
                   ref={passwordRef}
                   style={styles.input}
                   placeholder="Enter your password"
-                  placeholderTextColor={COLORS.placeholder}
+                  placeholderTextColor="#999"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={secureTextEntry}
@@ -422,7 +274,7 @@ const LoginScreen = ({ navigation }) => {
                   <Ionicons
                     name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
                     size={22}
-                    color={COLORS.textSecondary}
+                    color="#666"
                   />
                 </TouchableOpacity>
               </View>
@@ -442,21 +294,14 @@ const LoginScreen = ({ navigation }) => {
               disabled={loading}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <View style={styles.loginButtonContent}>
-                    <Ionicons name="log-in-outline" size={20} color="white" style={styles.buttonIcon} />
-                    <Text style={styles.loginButtonText}>Sign In</Text>
-                  </View>
-                )}
-              </LinearGradient>
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <View style={styles.loginButtonContent}>
+                  <Ionicons name="log-in-outline" size={20} color="white" style={styles.buttonIcon} />
+                  <Text style={styles.loginButtonText}>Sign In</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             <View style={styles.registerContainer}>
@@ -482,7 +327,7 @@ const LoginScreen = ({ navigation }) => {
                       handleLogin();
                     }}
                   >
-                    <Ionicons name="business-outline" size={16} color={COLORS.textSecondary} />
+                    <Ionicons name="business-outline" size={16} color="#666" />
                     <Text style={styles.debugButtonText}>As Recruiter</Text>
                   </TouchableOpacity>
                   
@@ -494,7 +339,7 @@ const LoginScreen = ({ navigation }) => {
                       handleLogin();
                     }}
                   >
-                    <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
+                    <Ionicons name="person-outline" size={16} color="#666" />
                     <Text style={styles.debugButtonText}>As Job Seeker</Text>
                   </TouchableOpacity>
                 </View>
@@ -510,46 +355,7 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.4,
-  },
-  backgroundShapes: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  shape1: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'white',
-    transform: [{ scale: 1.2 }],
-  },
-  shape2: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'white',
-    transform: [{ scale: 1.2 }],
-  },
-  shape3: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'white',
-    transform: [{ scale: 1.2 }],
+    backgroundColor: '#F9FAFB',
   },
   keyboardView: {
     flex: 1,
@@ -564,142 +370,154 @@ const styles = StyleSheet.create({
     marginTop: height * 0.12,
     marginBottom: height * 0.05,
   },
-  logoBadge: {
-    width: 100,
-    height: 100,
-    borderRadius: 25,
+  logoCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#F0F4F8',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    ...SHADOWS.large,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   logoText: {
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: 'white',
-    marginBottom: SPACING.xs,
+    color: '#333',
+    marginBottom: 8,
   },
   tagline: {
-    fontSize: FONTS.body,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
   },
   formContainer: {
     backgroundColor: 'white',
-    borderRadius: BORDERS.radiusLarge,
-    paddingHorizontal: SPACING.l,
-    paddingVertical: SPACING.l,
-    ...SHADOWS.large,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   formTitle: {
-    fontSize: FONTS.h2,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 4,
+    color: '#333',
+    marginBottom: 8,
   },
   formSubtitle: {
-    fontSize: FONTS.body,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.l,
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.error,
-    padding: SPACING.m,
-    borderRadius: BORDERS.radiusMedium,
-    marginBottom: SPACING.m,
+    backgroundColor: '#F44336',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
   errorText: {
     color: 'white',
-    marginLeft: SPACING.s,
+    marginLeft: 8,
     flex: 1,
   },
   inputGroup: {
-    marginBottom: SPACING.m,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: FONTS.label,
+    fontSize: 14,
     fontWeight: '500',
-    color: COLORS.text,
-    marginBottom: 6,
-    marginLeft: 4,
+    color: '#333',
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDERS.radiusMedium,
-    backgroundColor: COLORS.background,
-    ...SHADOWS.small,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
   },
   inputIcon: {
-    padding: SPACING.m,
+    padding: 12,
   },
   input: {
     flex: 1,
-    height: 56,
-    fontSize: FONTS.body,
-    color: COLORS.text,
+    height: 50,
+    fontSize: 16,
+    color: '#333',
   },
   eyeIcon: {
-    padding: SPACING.m,
+    padding: 12,
   },
   forgotPasswordButton: {
     alignSelf: 'flex-end',
-    marginBottom: SPACING.l,
+    marginBottom: 24,
   },
   forgotPasswordText: {
     color: COLORS.primary,
-    fontSize: FONTS.label,
+    fontSize: 14,
     fontWeight: '500',
   },
   loginButton: {
-    borderRadius: BORDERS.radiusMedium,
-    height: 56,
-    ...SHADOWS.medium,
-    overflow: 'hidden',
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   loginButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
   },
   buttonIcon: {
-    marginRight: SPACING.s,
+    marginRight: 8,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: FONTS.body,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: SPACING.l,
+    marginTop: 24,
   },
   registerText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.body,
+    color: '#666',
+    fontSize: 15,
   },
   registerLink: {
     color: COLORS.primary,
-    fontSize: FONTS.body,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   // Debug styles - only used in development
   debugContainer: {
-    marginTop: SPACING.xl,
-    padding: SPACING.m,
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    borderRadius: BORDERS.radiusMedium,
+    marginTop: 30,
+    padding: 12,
+    backgroundColor: '#F0F4F8',
+    borderRadius: 8,
     borderLeftWidth: 3,
     borderLeftColor: COLORS.accent,
   },
   debugHeader: {
-    fontSize: FONTS.caption,
-    color: COLORS.textSecondary,
+    fontSize: 12,
+    color: '#666',
     marginBottom: 8,
     textAlign: 'center',
     fontWeight: '500',
@@ -713,12 +531,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: BORDERS.radiusMedium,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 8,
   },
   debugButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.caption,
+    color: '#666',
+    fontSize: 12,
     marginLeft: 4,
   },
 });
