@@ -9,15 +9,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Image,
   Vibration,
   StatusBar,
   SafeAreaView,
   Platform,
-  Easing
+  Easing,
+  Pressable
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { matchingAPI, jobsAPI } from '../services/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -25,7 +25,7 @@ import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
-const ROTATION_ANGLE = 15; // Degrees to rotate when swiping
+const ROTATION_ANGLE = 12; // Degrees to rotate when swiping
 const CARD_OPACITY = 0.9; // Secondary card opacity
 
 // Sample data for jobs and candidates
@@ -166,6 +166,14 @@ const SAMPLE_CANDIDATES = [
   }
 ];
 
+// Use background gradient colors instead of images
+const BACKGROUND_COLORS = {
+  "tech": ['#2193b0', '#6dd5ed'],
+  "finance": ['#373B44', '#4286f4'],
+  "design": ['#834d9b', '#d04ed6'],
+  "default": ['#4b6cb7', '#182848'],
+};
+
 const SwipeScreen = ({ navigation }) => {
   // State
   const [data, setData] = useState([]);
@@ -174,6 +182,8 @@ const SwipeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  const [activeSection, setActiveSection] = useState('about');
 
   // Animation values
   const position = useRef(new Animated.ValueXY()).current;
@@ -202,6 +212,23 @@ const SwipeScreen = ({ navigation }) => {
     outputRange: [1, CARD_OPACITY, 1],
     extrapolate: 'clamp'
   });
+  
+  // Card animation values
+  const expandAnim = useRef(new Animated.Value(0)).current;
+  const cardHeight = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [height * 0.68, height * 0.85],
+    extrapolate: 'clamp'
+  });
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const detailsOpacity = expandAnim;
+
+  // Button scale animations
+  const buttonScales = useRef({
+    left: new Animated.Value(1),
+    right: new Animated.Value(1),
+    refresh: new Animated.Value(1)
+  }).current;
 
   // Refs
   const swipeInProgress = useRef(false);
@@ -238,9 +265,9 @@ const SwipeScreen = ({ navigation }) => {
   // Pan responder for swipe gestures
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !swipeInProgress.current,
+      onStartShouldSetPanResponder: () => !swipeInProgress.current && !expanded,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return !swipeInProgress.current && 
+        return !swipeInProgress.current && !expanded &&
                (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10);
       },
       onPanResponderGrant: () => {
@@ -249,13 +276,20 @@ const SwipeScreen = ({ navigation }) => {
           y: position.y._value
         });
         position.setValue({ x: 0, y: 0 });
+        
+        // Fade content immediately for better performance
+        Animated.timing(contentOpacity, {
+          toValue: 0.7,
+          duration: 100,
+          useNativeDriver: true
+        }).start();
       },
       onPanResponderMove: (_, gestureState) => {
         // Limit vertical movement and prioritize horizontal
         const dx = gestureState.dx;
         const dy = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2 
-          ? gestureState.dy * 0.2 // When primarily horizontal, dampen vertical
-          : gestureState.dy * 0.5; // Otherwise just dampen slightly
+          ? gestureState.dy * 0.1 // When primarily horizontal, greatly dampen vertical
+          : gestureState.dy * 0.4; // Otherwise just dampen slightly
         
         // Update position
         position.setValue({ x: dx, y: dy });
@@ -285,12 +319,19 @@ const SwipeScreen = ({ navigation }) => {
   // Reset card position with animation
   const resetCardPosition = () => {
     setSwipeDirection(null);
-    Animated.spring(position, {
-      toValue: { x: 0, y: 0 },
-      friction: 5,
-      tension: 40,
-      useNativeDriver: true
-    }).start();
+    Animated.parallel([
+      Animated.spring(position, {
+        toValue: { x: 0, y: 0 },
+        friction: 6,
+        tension: 50,
+        useNativeDriver: true
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      })
+    ]).start();
   };
 
   // Swipe card with animation
@@ -300,9 +341,13 @@ const SwipeScreen = ({ navigation }) => {
     
     // Trigger haptic feedback
     if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(
+        direction === 'right' 
+          ? Haptics.ImpactFeedbackStyle.Medium 
+          : Haptics.ImpactFeedbackStyle.Light
+      );
     } else {
-      Vibration.vibrate(20);
+      Vibration.vibrate(direction === 'right' ? 30 : 20);
     }
     
     // Set swipe direction for UI
@@ -312,12 +357,19 @@ const SwipeScreen = ({ navigation }) => {
     const xDestination = direction === 'right' ? width * 1.5 : -width * 1.5;
     
     // Animate swipe
-    Animated.timing(position, {
-      toValue: { x: xDestination, y: 0 },
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.ease
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(position, {
+        toValue: { x: xDestination, y: direction === 'right' ? -60 : 60 },
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.exp)
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true
+      })
+    ]).start(() => {
       // After animation completes
       handleSwipeComplete(direction);
     });
@@ -362,6 +414,16 @@ const SwipeScreen = ({ navigation }) => {
     position.setValue({ x: 0, y: 0 });
     setSwipeDirection(null);
     swipeInProgress.current = false;
+    
+    // Reset expanded state and opacity
+    if (expanded) {
+      toggleCardExpansion();
+    }
+    Animated.timing(contentOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true
+    }).start();
   };
 
   // Show match alert
@@ -397,6 +459,9 @@ const SwipeScreen = ({ navigation }) => {
   const refreshCards = () => {
     setRefreshing(true);
     
+    // Show feedback
+    animateButtonScale('refresh');
+    
     // Animated reset
     Animated.timing(position, {
       toValue: { x: 0, y: 0 },
@@ -414,140 +479,603 @@ const SwipeScreen = ({ navigation }) => {
     });
   };
 
+  // Toggle card expansion for details
+  const toggleCardExpansion = () => {
+    if (expanded) {
+      // Contract card
+      Animated.parallel([
+        Animated.timing(expandAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false
+        }),
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true
+        })
+      ]).start();
+    } else {
+      // Expand card
+      Animated.parallel([
+        Animated.timing(expandAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false
+        }),
+        Animated.timing(contentOpacity, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true
+        })
+      ]).start();
+    }
+    setExpanded(!expanded);
+  };
+
+  // Animate button scale on press
+  const animateButtonScale = (button) => {
+    Animated.sequence([
+      Animated.timing(buttonScales[button], {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true
+      }),
+      Animated.spring(buttonScales[button], {
+        toValue: 1,
+        friction: 4,
+        tension: 100,
+        useNativeDriver: true
+      })
+    ]).start();
+  };
+
   // Manual swipe buttons
   const handleButtonSwipe = (direction) => {
-    if (currentIndex >= data.length || loading || refreshing || swipeInProgress.current) return;
+    if (currentIndex >= data.length || loading || refreshing || swipeInProgress.current || expanded) return;
+    
+    // Animate button scale
+    animateButtonScale(direction === 'left' ? 'left' : 'right');
+    
+    // Swipe card
     swipeCard(direction);
   };
 
   /* Render Functions */
 
   // Render job card
-  const renderJobCard = (job) => (
-    <View style={styles.cardContent}>
-      {/* Card Header with Gradient */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']}
-        style={styles.cardGradient}
-      />
-      
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{job.title}</Text>
-        <Text style={styles.companyName}>{job.company || job.recruiter?.company_name}</Text>
-        <View style={styles.locationWrapper}>
-          <Ionicons name="location-outline" size={16} color="#fff" />
-          <Text style={styles.location}>
-            {job.location}
-            {job.is_remote && " • Remote"}
-          </Text>
-        </View>
-      </View>
-      
-      {/* Card Body */}
-      <View style={styles.cardBody}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About the role:</Text>
-          <Text style={styles.description} numberOfLines={4}>
-            {job.description}
-          </Text>
-        </View>
+  const renderJobCard = (job) => {
+    // Determine background colors based on company
+    const companyLower = job.company?.toLowerCase() || job.recruiter?.company_name?.toLowerCase() || '';
+    let backgroundColors = BACKGROUND_COLORS.default;
+    
+    if (companyLower.includes('tech') || companyLower.includes('data') || companyLower.includes('app')) {
+      backgroundColors = BACKGROUND_COLORS.tech;
+    } else if (companyLower.includes('creative') || companyLower.includes('design')) {
+      backgroundColors = BACKGROUND_COLORS.design;
+    } else if (companyLower.includes('finance') || companyLower.includes('bank')) {
+      backgroundColors = BACKGROUND_COLORS.finance;
+    }
+    
+    return (
+      <View style={styles.cardContent}>
+        {/* Background Gradient */}
+        <LinearGradient
+          colors={backgroundColors}
+          style={styles.cardBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Requirements:</Text>
-          <Text style={styles.description} numberOfLines={3}>
-            {job.requirements}
-          </Text>
-        </View>
+        {/* Gradient overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
+          style={styles.cardGradient}
+        />
         
-        {job.salary_min && job.salary_max && (
-          <View style={styles.salaryContainer}>
-            <FontAwesome5 name="money-bill-wave" size={16} color="#4CAF50" />
-            <Text style={styles.salary}>
-              ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}
+        {/* Card Header */}
+        <Animated.View 
+          style={[
+            styles.cardHeader, 
+            { opacity: contentOpacity }
+          ]}
+        >
+          {/* Company logo or initial */}
+          <View style={styles.logoContainer}>
+            <View style={styles.companyInitial}>
+              <Text style={styles.initialText}>
+                {(job.company || job.recruiter?.company_name || "").charAt(0)}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.headerTextContent}>
+            <Text style={styles.cardTitle}>{job.title}</Text>
+            <Text style={styles.companyName}>{job.company || job.recruiter?.company_name}</Text>
+            <View style={styles.locationWrapper}>
+              <Ionicons name="location-outline" size={16} color="#fff" />
+              <Text style={styles.location}>
+                {job.location}
+                {job.is_remote && " • Remote"}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+        
+        {/* Expand/Collapse Button */}
+        <TouchableOpacity 
+          style={styles.expandButton}
+          onPress={toggleCardExpansion}
+          activeOpacity={0.8}
+        >
+          <Ionicons 
+            name={expanded ? "chevron-up" : "chevron-down"} 
+            size={22} 
+            color="#fff" 
+          />
+        </TouchableOpacity>
+        
+        {/* Card Body - Summary Content */}
+        <Animated.View 
+          style={[
+            styles.cardBody, 
+            { opacity: contentOpacity }
+          ]}
+        >
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About the role:</Text>
+            <Text style={styles.description} numberOfLines={4}>
+              {job.description}
             </Text>
           </View>
-        )}
+          
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Requirements:</Text>
+            <Text style={styles.description} numberOfLines={2}>
+              {job.requirements}
+            </Text>
+          </View>
+          
+          {job.salary_min && job.salary_max && (
+            <View style={styles.salaryContainer}>
+              <FontAwesome5 name="money-bill-wave" size={16} color={COLORS.accent} />
+              <Text style={styles.salary}>
+                ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+        
+        {/* Card Footer */}
+        <Animated.View 
+          style={[
+            styles.cardFooter,
+            { opacity: contentOpacity }
+          ]}
+        >
+          <View style={styles.tagsContainer}>
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>
+                {job.job_type === 'full_time' ? 'Full Time' : 
+                job.job_type === 'part_time' ? 'Part Time' : 
+                job.job_type === 'contract' ? 'Contract' : 'Internship'}
+              </Text>
+            </View>
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>
+                {job.experience_level === 'entry' ? 'Entry Level' : 
+                job.experience_level === 'mid' ? 'Mid Level' : 
+                job.experience_level === 'senior' ? 'Senior Level' : 'Executive'}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+        
+        {/* Detailed Card Content - Only visible when expanded */}
+        <Animated.View 
+          style={[
+            styles.detailedContent,
+            { 
+              opacity: detailsOpacity,
+              display: expandAnim._value > 0 ? 'flex' : 'none'
+            }
+          ]}
+        >
+          <View style={styles.detailTabContainer}>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab, 
+                activeSection === 'about' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('about')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'about' && styles.activeDetailTabText
+              ]}>About</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab,
+                activeSection === 'requirements' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('requirements')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'requirements' && styles.activeDetailTabText
+              ]}>Requirements</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab,
+                activeSection === 'company' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('company')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'company' && styles.activeDetailTabText
+              ]}>Company</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {activeSection === 'about' && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Job Description</Text>
+              <Text style={styles.detailText}>{job.description}</Text>
+              
+              <View style={styles.detailInfoRow}>
+                <View style={styles.detailInfoItem}>
+                  <MaterialIcons name="work" size={20} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Job Type</Text>
+                    <Text style={styles.detailInfoValue}>
+                      {job.job_type === 'full_time' ? 'Full Time' : 
+                       job.job_type === 'part_time' ? 'Part Time' : 
+                       job.job_type === 'contract' ? 'Contract' : 'Internship'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <MaterialCommunityIcons name="medal-outline" size={20} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Experience</Text>
+                    <Text style={styles.detailInfoValue}>
+                      {job.experience_level === 'entry' ? 'Entry Level' : 
+                       job.experience_level === 'mid' ? 'Mid Level' : 
+                       job.experience_level === 'senior' ? 'Senior Level' : 'Executive'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              
+              <View style={styles.detailInfoRow}>
+                <View style={styles.detailInfoItem}>
+                  <FontAwesome5 name="money-bill-wave" size={18} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Salary Range</Text>
+                    <Text style={styles.detailInfoValue}>
+                      ${job.salary_min?.toLocaleString() || 'N/A'} - ${job.salary_max?.toLocaleString() || 'N/A'}/year
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <Ionicons name="location" size={20} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Location</Text>
+                    <Text style={styles.detailInfoValue}>
+                      {job.location}{job.is_remote ? ' (Remote)' : ''}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {activeSection === 'requirements' && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Requirements</Text>
+              <Text style={styles.detailText}>{job.requirements}</Text>
+              
+              <Text style={styles.detailSectionTitle}>Skills Needed</Text>
+              <View style={styles.detailSkillContainer}>
+                {(job.skills_required || "JavaScript, React, HTML, CSS, Communication, Teamwork").split(',').map((skill, idx) => (
+                  <View style={styles.detailSkillBadge} key={idx}>
+                    <Text style={styles.detailSkillText}>{skill.trim()}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {activeSection === 'company' && (
+            <View style={styles.detailSection}>
+              <View style={styles.companyDetailHeader}>
+                <View style={styles.companyDetailLogoContainer}>
+                  <View style={styles.companyDetailInitial}>
+                    <Text style={styles.companyDetailInitialText}>
+                      {(job.company || job.recruiter?.company_name || "").charAt(0)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.companyDetailName}>{job.company || job.recruiter?.company_name}</Text>
+              </View>
+              
+              <Text style={styles.detailSectionTitle}>About the Company</Text>
+              <Text style={styles.detailText}>
+                {job.recruiter?.company_description || 
+                 `${job.company || job.recruiter?.company_name} is a leading company in the industry, dedicated to innovation and excellence. We pride ourselves on our commitment to quality and customer satisfaction.`}
+              </Text>
+              
+              <View style={styles.companyStats}>
+                <View style={styles.companyStatItem}>
+                  <Text style={styles.companyStatValue}>500+</Text>
+                  <Text style={styles.companyStatLabel}>Employees</Text>
+                </View>
+                <View style={styles.companyStatItem}>
+                  <Text style={styles.companyStatValue}>2010</Text>
+                  <Text style={styles.companyStatLabel}>Founded</Text>
+                </View>
+                <View style={styles.companyStatItem}>
+                  <Text style={styles.companyStatValue}>20+</Text>
+                  <Text style={styles.companyStatLabel}>Countries</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </Animated.View>
       </View>
-      
-      {/* Card Footer */}
-      <View style={styles.cardFooter}>
-        <View style={styles.tagsContainer}>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>
-              {job.job_type === 'full_time' ? 'Full Time' : 
-               job.job_type === 'part_time' ? 'Part Time' : 
-               job.job_type === 'contract' ? 'Contract' : 'Internship'}
-            </Text>
-          </View>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>
-              {job.experience_level === 'entry' ? 'Entry Level' : 
-               job.experience_level === 'mid' ? 'Mid Level' : 
-               job.experience_level === 'senior' ? 'Senior Level' : 'Executive'}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
+    );
+  };
   
   // Render candidate card
-  const renderCandidateCard = (candidate) => (
-    <View style={styles.cardContent}>
-      {/* Card Header with Gradient */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']}
-        style={styles.cardGradient}
-      />
-      
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{candidate.first_name} {candidate.last_name}</Text>
-        <Text style={styles.companyName}>{candidate.title}</Text>
-        <View style={styles.locationWrapper}>
-          <MaterialIcons name="work-outline" size={16} color="#fff" />
-          <Text style={styles.location}>
-            {candidate.experience_years} years experience
-          </Text>
-        </View>
-      </View>
-      
-      {/* Card Body */}
-      <View style={styles.cardBody}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About:</Text>
-          <Text style={styles.description} numberOfLines={3}>
-            {candidate.bio}
-          </Text>
-        </View>
+  const renderCandidateCard = (candidate) => {
+    return (
+      <View style={styles.cardContent}>
+        {/* Background Gradient - subtle pattern for candidate */}
+        <LinearGradient
+          colors={BACKGROUND_COLORS.default}
+          style={styles.cardBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Skills:</Text>
-          <View style={styles.skillsContainer}>
-            {candidate.skills.split(',').map((skill, index) => (
-              <View key={index} style={styles.skillBadge}>
-                <Text style={styles.skillBadgeText}>{skill.trim()}</Text>
-              </View>
-            ))}
+        {/* Gradient overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
+          style={styles.cardGradient}
+        />
+        
+        {/* Card Header */}
+        <Animated.View 
+          style={[
+            styles.cardHeader, 
+            styles.candidateHeader,
+            { opacity: contentOpacity }
+          ]}
+        >
+          {/* Candidate profile image/initial */}
+          <View style={styles.candidateImageContainer}>
+            <View style={styles.candidateImagePlaceholder}>
+              <Text style={styles.candidateInitialText}>{candidate.first_name.charAt(0)}</Text>
+            </View>
           </View>
-        </View>
+          
+          <View style={styles.headerTextContent}>
+            <Text style={styles.cardTitle}>{candidate.first_name} {candidate.last_name}</Text>
+            <Text style={styles.companyName}>{candidate.title}</Text>
+            <View style={styles.locationWrapper}>
+              <MaterialIcons name="work-outline" size={16} color="#fff" />
+              <Text style={styles.location}>
+                {candidate.experience_years} years experience
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Education:</Text>
-          <Text style={styles.description} numberOfLines={2}>
-            {candidate.education}
-          </Text>
-        </View>
+        {/* Expand/Collapse Button */}
+        <TouchableOpacity 
+          style={styles.expandButton}
+          onPress={toggleCardExpansion}
+          activeOpacity={0.8}
+        >
+          <Ionicons 
+            name={expanded ? "chevron-up" : "chevron-down"} 
+            size={22} 
+            color="#fff" 
+          />
+        </TouchableOpacity>
+        
+        {/* Card Body - Summary Content */}
+        <Animated.View 
+          style={[
+            styles.cardBody, 
+            { opacity: contentOpacity }
+          ]}
+        >
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About:</Text>
+            <Text style={styles.description} numberOfLines={3}>
+              {candidate.bio}
+            </Text>
+          </View>
+          
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Skills:</Text>
+            <View style={styles.skillsContainer}>
+              {candidate.skills.split(',').map((skill, index) => (
+                <View key={index} style={styles.skillBadge}>
+                  <Text style={styles.skillBadgeText}>{skill.trim()}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Education:</Text>
+            <Text style={styles.description} numberOfLines={2}>
+              {candidate.education}
+            </Text>
+          </View>
+        </Animated.View>
+        
+        {/* Detailed Card Content - Only visible when expanded */}
+        <Animated.View 
+          style={[
+            styles.detailedContent,
+            { 
+              opacity: detailsOpacity,
+              display: expandAnim._value > 0 ? 'flex' : 'none'
+            }
+          ]}
+        >
+          <View style={styles.detailTabContainer}>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab, 
+                activeSection === 'about' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('about')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'about' && styles.activeDetailTabText
+              ]}>About</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab,
+                activeSection === 'skills' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('skills')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'skills' && styles.activeDetailTabText
+              ]}>Skills</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.detailTab,
+                activeSection === 'education' && styles.activeDetailTab
+              ]}
+              onPress={() => setActiveSection('education')}
+            >
+              <Text style={[
+                styles.detailTabText,
+                activeSection === 'education' && styles.activeDetailTabText
+              ]}>Education</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {activeSection === 'about' && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Biography</Text>
+              <Text style={styles.detailText}>{candidate.bio}</Text>
+              
+              <View style={styles.detailInfoRow}>
+                <View style={styles.detailInfoItem}>
+                  <MaterialIcons name="work" size={20} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Current Title</Text>
+                    <Text style={styles.detailInfoValue}>{candidate.title}</Text>
+                  </View>
+                </View>
+                <View style={styles.detailInfoItem}>
+                  <MaterialCommunityIcons name="certificate-outline" size={20} color={COLORS.primary} />
+                  <View style={styles.detailInfoContent}>
+                    <Text style={styles.detailInfoLabel}>Experience</Text>
+                    <Text style={styles.detailInfoValue}>{candidate.experience_years} years</Text>
+                  </View>
+                </View>
+              </View>
+              
+              <Text style={styles.detailSectionTitle}>Looking For</Text>
+              <Text style={styles.detailText}>
+                {candidate.desired_position || "A challenging position where I can utilize my skills and experience to make a meaningful impact."}
+              </Text>
+            </View>
+          )}
+          
+          {activeSection === 'skills' && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Technical Skills</Text>
+              <View style={styles.detailSkillContainer}>
+                {candidate.skills.split(',').map((skill, idx) => (
+                  <View style={styles.detailSkillBadge} key={idx}>
+                    <Text style={styles.detailSkillText}>{skill.trim()}</Text>
+                  </View>
+                ))}
+              </View>
+              
+              <Text style={styles.detailSectionTitle}>Soft Skills</Text>
+              <View style={styles.detailSkillContainer}>
+                {["Communication", "Teamwork", "Problem Solving", "Time Management", "Adaptability"].map((skill, idx) => (
+                  <View style={[styles.detailSkillBadge, styles.softSkillBadge]} key={`soft-${idx}`}>
+                    <Text style={styles.detailSkillText}>{skill}</Text>
+                  </View>
+                ))}
+              </View>
+              
+              <Text style={styles.detailSectionTitle}>Languages</Text>
+              <View style={styles.detailSkillContainer}>
+                {["English (Native)", "Spanish (Intermediate)"].map((lang, idx) => (
+                  <View style={[styles.detailSkillBadge, styles.languageSkillBadge]} key={`lang-${idx}`}>
+                    <Text style={styles.detailSkillText}>{lang}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {activeSection === 'education' && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Education</Text>
+              <View style={styles.educationItem}>
+                <View style={styles.educationDot} />
+                <View style={styles.educationContent}>
+                  <Text style={styles.educationDegree}>{candidate.education.split(',')[0] || "BS Computer Science"}</Text>
+                  <Text style={styles.educationSchool}>{candidate.education.split(',')[1] || "Stanford University"}</Text>
+                  <Text style={styles.educationYear}>2015 - 2019</Text>
+                </View>
+              </View>
+              
+              <Text style={styles.detailSectionTitle}>Certifications</Text>
+              <View style={styles.certContainer}>
+                <View style={styles.certItem}>
+                  <MaterialCommunityIcons name="certificate" size={24} color={COLORS.primary} />
+                  <View style={styles.certContent}>
+                    <Text style={styles.certName}>AWS Solutions Architect</Text>
+                    <Text style={styles.certIssuer}>Amazon Web Services</Text>
+                  </View>
+                </View>
+                <View style={styles.certItem}>
+                  <MaterialCommunityIcons name="certificate" size={24} color={COLORS.primary} />
+                  <View style={styles.certContent}>
+                    <Text style={styles.certName}>Professional Scrum Master</Text>
+                    <Text style={styles.certIssuer}>Scrum.org</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+        </Animated.View>
       </View>
-    </View>
-  );
+    );
+  };
   
   // Render card
   const renderCard = () => {
     if (loading) {
       return (
         <View style={[styles.card, styles.loadingCard]}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading profiles...</Text>
+          <LinearGradient
+            colors={[COLORS.primaryLight, COLORS.primary]}
+            style={[StyleSheet.absoluteFill, styles.loadingCardGradient]}
+          />
+          <ActivityIndicator size="large" color="white" />
+          <Text style={styles.loadingText}>Finding your perfect matches...</Text>
         </View>
       );
     }
@@ -555,7 +1083,11 @@ const SwipeScreen = ({ navigation }) => {
     if (refreshing) {
       return (
         <View style={[styles.card, styles.loadingCard]}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <LinearGradient
+            colors={[COLORS.accent, COLORS.accentDark]}
+            style={[StyleSheet.absoluteFill, styles.loadingCardGradient]}
+          />
+          <ActivityIndicator size="large" color="white" />
           <Text style={styles.loadingText}>Refreshing...</Text>
         </View>
       );
@@ -564,16 +1096,31 @@ const SwipeScreen = ({ navigation }) => {
     if (currentIndex >= data.length) {
       return (
         <View style={[styles.card, styles.endOfCards]}>
-          <Ionicons name="checkmark-circle-outline" size={80} color="#bbb" />
+          <LinearGradient
+            colors={['#f8f9fa', '#e9ecef']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <Ionicons name="checkmark-circle-outline" size={96} color={COLORS.primary} />
           <Text style={styles.endOfCardsText}>No more profiles</Text>
           <Text style={styles.endOfCardsSubtext}>
-            Check back later for more {userType === 'job_seeker' ? 'jobs' : 'candidates'}
+            You've seen all available {userType === 'job_seeker' ? 'jobs' : 'candidates'}.
+            Check back later for new matches!
           </Text>
           <TouchableOpacity 
             style={styles.refreshButton}
             onPress={refreshCards}
+            activeOpacity={0.7}
           >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
             <Text style={styles.refreshButtonText}>Start Over</Text>
+            <Ionicons name="refresh" size={20} color="white" style={{ marginLeft: 8 }} />
           </TouchableOpacity>
         </View>
       );
@@ -592,6 +1139,7 @@ const SwipeScreen = ({ navigation }) => {
               { translateY: position.y },
               { rotate }
             ],
+            height: cardHeight,
             zIndex: 2
           }
         ]}
@@ -606,7 +1154,7 @@ const SwipeScreen = ({ navigation }) => {
             { opacity: likeOpacity }
           ]}
         >
-          <Ionicons name="checkmark" size={36} color="white" />
+          <MaterialCommunityIcons name="thumb-up" size={36} color="white" />
           <Text style={styles.indicatorText}>LIKE</Text>
         </Animated.View>
         
@@ -617,7 +1165,7 @@ const SwipeScreen = ({ navigation }) => {
             { opacity: nopeOpacity }
           ]}
         >
-          <Ionicons name="close" size={36} color="white" />
+          <MaterialCommunityIcons name="thumb-down" size={36} color="white" />
           <Text style={styles.indicatorText}>NOPE</Text>
         </Animated.View>
       </Animated.View>
@@ -645,31 +1193,41 @@ const SwipeScreen = ({ navigation }) => {
         ]}
       >
         {userType === 'job_seeker' ? (
-          <View style={styles.cardContent}>
+          <View style={styles.nextCardContent}>
             <LinearGradient
-              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']}
+              colors={BACKGROUND_COLORS.default}
+              style={styles.cardBackground}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
               style={styles.cardGradient}
             />
-            
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{nextItem.title}</Text>
-              <Text style={styles.companyName}>
+            <View style={styles.nextCardHeader}>
+              <Text style={styles.nextCardTitle}>{nextItem.title}</Text>
+              <Text style={styles.nextCardSubtitle}>
                 {nextItem.company || nextItem.recruiter?.company_name}
               </Text>
             </View>
           </View>
         ) : (
-          <View style={styles.cardContent}>
+          <View style={styles.nextCardContent}>
             <LinearGradient
-              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']}
+              colors={BACKGROUND_COLORS.default}
+              style={styles.cardBackground}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.1)']}
               style={styles.cardGradient}
             />
-            
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>
+            <View style={styles.nextCardHeader}>
+              <Text style={styles.nextCardTitle}>
                 {nextItem.first_name} {nextItem.last_name}
               </Text>
-              <Text style={styles.companyName}>{nextItem.title}</Text>
+              <Text style={styles.nextCardSubtitle}>{nextItem.title}</Text>
             </View>
           </View>
         )}
@@ -687,12 +1245,20 @@ const SwipeScreen = ({ navigation }) => {
           {userType === 'job_seeker' ? 'Find Jobs' : 'Find Candidates'}
         </Text>
         
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => Alert.alert('Coming Soon', 'Filters will be available in a future update.')}
-        >
-          <Ionicons name="options-outline" size={24} color="#333" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={styles.filterButton}
+            onPress={() => Alert.alert('Coming Soon', 'Filters will be available in a future update.')}
+          >
+            <Ionicons name="options-outline" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Ionicons name="person-circle-outline" size={26} color="#333" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Cards */}
@@ -704,29 +1270,56 @@ const SwipeScreen = ({ navigation }) => {
       {/* Swipe Buttons */}
       {!loading && !refreshing && currentIndex < data.length && (
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity 
-            style={[styles.button, styles.buttonLeft, swipeDirection === 'left' && styles.buttonLeftActive]} 
-            onPress={() => handleButtonSwipe('left')}
-            activeOpacity={0.7}
+          <Animated.View
+            style={[
+              styles.buttonWrapper,
+              {
+                transform: [{ scale: buttonScales.left }]
+              }
+            ]}
           >
-            <Ionicons name="close" size={30} color="white" />
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonLeft, swipeDirection === 'left' && styles.buttonLeftActive]} 
+              onPress={() => handleButtonSwipe('left')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="thumb-down" size={28} color="white" />
+            </TouchableOpacity>
+          </Animated.View>
           
-          <TouchableOpacity 
-            style={[styles.button, styles.buttonMiddle]} 
-            onPress={refreshCards}
-            activeOpacity={0.7}
+          <Animated.View
+            style={[
+              styles.buttonWrapper,
+              {
+                transform: [{ scale: buttonScales.refresh }]
+              }
+            ]}
           >
-            <Ionicons name="refresh" size={26} color="white" />
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonMiddle]} 
+              onPress={refreshCards}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={24} color="white" />
+            </TouchableOpacity>
+          </Animated.View>
           
-          <TouchableOpacity 
-            style={[styles.button, styles.buttonRight, swipeDirection === 'right' && styles.buttonRightActive]} 
-            onPress={() => handleButtonSwipe('right')}
-            activeOpacity={0.7}
+          <Animated.View
+            style={[
+              styles.buttonWrapper,
+              {
+                transform: [{ scale: buttonScales.right }]
+              }
+            ]}
           >
-            <Ionicons name="checkmark" size={30} color="white" />
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonRight, swipeDirection === 'right' && styles.buttonRightActive]} 
+              onPress={() => handleButtonSwipe('right')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="thumb-up" size={28} color="white" />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       )}
     </SafeAreaView>
@@ -743,7 +1336,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 10 : 40,
+    paddingTop: Platform.OS === 'ios' ? 10 : 20,
     paddingBottom: 15,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -751,12 +1344,22 @@ const styles = StyleSheet.create({
     ...SHADOWS.small
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     color: COLORS.text,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   filterButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    marginRight: 10,
+  },
+  profileButton: {
+    padding: 6,
     borderRadius: 8,
     backgroundColor: COLORS.background,
   },
@@ -764,75 +1367,137 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
   card: {
     position: 'absolute',
-    width: width * 0.9,
+    width: width * 0.92,
     height: height * 0.68,
     backgroundColor: 'white',
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    ...SHADOWS.medium,
+    ...SHADOWS.large,
+  },
+  cardBackground: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
   },
   cardGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 150,
+    height: 180,
     zIndex: 1,
   },
   cardContent: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 24,
     backgroundColor: 'white',
     overflow: 'hidden',
   },
   cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 20,
     paddingTop: 35,
     zIndex: 2,
   },
+  candidateHeader: {
+    paddingTop: 40,
+    alignItems: 'flex-start', 
+  },
+  logoContainer: {
+    marginRight: 15,
+  },
+  companyInitial: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  initialText: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  candidateImageContainer: {
+    marginRight: 15,
+  },
+  candidateImagePlaceholder: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: COLORS.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  candidateInitialText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  headerTextContent: {
+    flex: 1,
+  },
   cardTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   companyName: {
-    fontSize: 20,
+    fontSize: 18,
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  expandButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   locationWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   location: {
-    fontSize: 16,
+    fontSize: 14,
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
-    marginLeft: 5,
+    marginLeft: 4,
   },
   cardBody: {
     flex: 1,
     padding: 20,
-    paddingTop: 15,
+    paddingTop: 10,
   },
   section: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
     color: COLORS.primary,
@@ -847,13 +1512,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
     padding: 12,
-    borderRadius: 10,
-    marginTop: 15,
+    borderRadius: 12,
+    marginVertical: 8,
   },
   salary: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: COLORS.accent,
     marginLeft: 10,
   },
   skillsContainer: {
@@ -862,14 +1527,14 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   skillBadge: {
-    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+    backgroundColor: 'rgba(25, 118, 210, 0.08)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(25, 118, 210, 0.3)',
+    borderColor: 'rgba(25, 118, 210, 0.2)',
   },
   skillBadgeText: {
     color: COLORS.primary,
@@ -877,7 +1542,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cardFooter: {
-    padding: 20,
+    padding: 15,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
@@ -887,57 +1552,292 @@ const styles = StyleSheet.create({
   },
   tag: {
     backgroundColor: COLORS.background,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     marginRight: 10,
     marginBottom: 5,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   tagText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textSecondary,
     fontWeight: '500',
+  },
+  detailedContent: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 20,
+    zIndex: 5,
+  },
+  detailTabContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  detailTab: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginRight: 16,
+  },
+  activeDetailTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  detailTabText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  activeDetailTabText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  detailSection: {
+    flex: 1,
+  },
+  detailSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 10,
+    marginTop: 16,
+  },
+  detailText: {
+    fontSize: 16,
+    color: COLORS.text,
+    lineHeight: 24,
+    marginBottom: 15,
+  },
+  detailInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  detailInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    backgroundColor: 'rgba(240, 240, 240, 0.5)',
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 5,
+  },
+  detailInfoContent: {
+    marginLeft: 8,
+  },
+  detailInfoLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  detailInfoValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  detailSkillContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 20,
+  },
+  detailSkillBadge: {
+    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(25, 118, 210, 0.2)',
+  },
+  softSkillBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    borderColor: 'rgba(76, 175, 80, 0.2)',
+  },
+  languageSkillBadge: {
+    backgroundColor: 'rgba(156, 39, 176, 0.08)',
+    borderColor: 'rgba(156, 39, 176, 0.2)',
+  },
+  detailSkillText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  companyDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  companyDetailLogoContainer: {
+    marginRight: 15,
+  },
+  companyDetailInitial: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  companyDetailInitialText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  companyDetailName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  companyStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: 'rgba(240, 240, 240, 0.5)',
+    borderRadius: 16,
+    padding: 15,
+    marginTop: 20,
+  },
+  companyStatItem: {
+    alignItems: 'center',
+  },
+  companyStatValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  companyStatLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  educationItem: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  educationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    marginTop: 6,
+    marginRight: 10,
+  },
+  educationContent: {
+    flex: 1,
+  },
+  educationDegree: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  educationSchool: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginVertical: 2,
+  },
+  educationYear: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  certContainer: {
+    marginTop: 5,
+  },
+  certItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(240, 240, 240, 0.5)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  certContent: {
+    marginLeft: 10,
+  },
+  certName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  certIssuer: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
   nextCard: {
     top: 10,
   },
+  nextCardContent: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  nextCardHeader: {
+    padding: 25,
+    paddingTop: 40,
+    zIndex: 2,
+  },
+  nextCardTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+    marginBottom: 6,
+  },
+  nextCardSubtitle: {
+    fontSize: 16,
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
   swipeIndicator: {
     position: 'absolute',
     padding: 10,
-    borderWidth: 4,
+    paddingHorizontal: 12,
+    borderWidth: 3,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     transform: [{ rotate: '-30deg' }],
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   likeIndicator: {
     borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.8)',
-    right: 30,
-    top: 40,
+    backgroundColor: 'rgba(76, 175, 80, 0.85)',
+    right: 25,
+    top: 35,
   },
   nopeIndicator: {
     borderColor: '#FF5252',
-    backgroundColor: 'rgba(255, 82, 82, 0.8)',
-    left: 30,
-    top: 40,
+    backgroundColor: 'rgba(255, 82, 82, 0.85)',
+    left: 25,
+    top: 35,
   },
   indicatorText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
-    marginTop: 4,
+    marginTop: 2,
   },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-evenly',
     alignItems: 'center',
-    paddingVertical: 25,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    ...SHADOWS.small
+  },
+  buttonWrapper: {
+    // Empty wrapper for button scale animations
   },
   button: {
     width: 64,
@@ -945,7 +1845,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 15,
+    margin: 10,
     ...SHADOWS.medium,
   },
   buttonLeft: {
@@ -953,37 +1853,41 @@ const styles = StyleSheet.create({
   },
   buttonLeftActive: {
     backgroundColor: '#D32F2F',
-    transform: [{ scale: 1.1 }],
   },
   buttonMiddle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFC107',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primaryLight,
   },
   buttonRight: {
     backgroundColor: '#4CAF50',
   },
   buttonRightActive: {
     backgroundColor: '#388E3C',
-    transform: [{ scale: 1.1 }],
   },
   loadingCard: {
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 24,
+  },
+  loadingCardGradient: {
+    borderRadius: 24,
   },
   loadingText: {
     fontSize: 18,
-    color: COLORS.textSecondary,
+    color: 'white',
+    fontWeight: '500',
     marginTop: 20,
   },
   endOfCards: {
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    borderRadius: 24,
   },
   endOfCardsText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text,
     marginVertical: 15,
@@ -993,13 +1897,18 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: 30,
+    paddingHorizontal: 20,
+    lineHeight: 24,
   },
   refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 30,
-    ...SHADOWS.small,
+    borderRadius: 24,
+    ...SHADOWS.medium,
+    overflow: 'hidden',
   },
   refreshButtonText: {
     color: 'white',

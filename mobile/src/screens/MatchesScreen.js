@@ -11,14 +11,18 @@ import {
   StatusBar, 
   RefreshControl,
   Animated,
-  Platform
+  Platform,
+  Pressable,
+  Dimensions
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { matchingAPI } from '../services/api';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 // Sample matches data
 const SAMPLE_MATCHES = [
@@ -90,9 +94,15 @@ const SAMPLE_MATCHES = [
   }
 ];
 
+// Helper function to get avatar letter
+const getAvatarLetter = (name) => {
+  return name ? name.charAt(0).toUpperCase() : '?';
+};
+
 // Create a separate MatchItem component for proper hook usage
-const MatchItem = React.memo(({ item, index, userType, onPress, delayOffset = 0 }) => {
+const MatchItem = React.memo(({ item, index, userType, onPress, onLongPress, delayOffset = 0 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
   
   const isJobSeeker = userType === 'job_seeker';
   const matchName = isJobSeeker
@@ -109,13 +119,22 @@ const MatchItem = React.memo(({ item, index, userType, onPress, delayOffset = 0 
   
   // Animation effect
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      delay: index * 100 + delayOffset,
-      useNativeDriver: true
-    }).start();
-  }, [fadeAnim, index, delayOffset]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 80 + delayOffset,
+        useNativeDriver: true
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        delay: index * 80 + delayOffset,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [fadeAnim, scaleAnim, index, delayOffset]);
   
   // Format date helper
   const formatDate = (dateString) => {
@@ -143,23 +162,35 @@ const MatchItem = React.memo(({ item, index, userType, onPress, delayOffset = 0 
     // Otherwise, return formatted date
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+
+  // Get avatarBackground color based on first character 
+  const getAvatarColor = (letter) => {
+    const colors = [
+      COLORS.primary, COLORS.secondary, COLORS.accent, 
+      '#4E5283', '#48A9A6', '#D4B483', '#E07A5F'
+    ];
+    
+    const charCode = letter.charCodeAt(0);
+    return colors[charCode % colors.length];
+  };
+  
+  const avatarColor = getAvatarColor(avatarLetter);
   
   return (
     <Animated.View 
       style={{ 
         opacity: fadeAnim, 
         transform: [{ 
-          translateY: fadeAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0]
-          }) 
+          scale: scaleAnim 
         }] 
       }}
     >
       <TouchableOpacity 
         style={[styles.matchItem, hasUnread && styles.unreadMatchItem]} 
         onPress={() => onPress(item)}
+        onLongPress={() => onLongPress && onLongPress(item)}
         activeOpacity={0.7}
+        delayPressIn={50}
       >
         {/* Avatar */}
         <View style={styles.avatarContainer}>
@@ -171,7 +202,7 @@ const MatchItem = React.memo(({ item, index, userType, onPress, delayOffset = 0 
           ) : (
             <View style={[
               styles.avatarPlaceholder,
-              isJobSeeker ? styles.companyAvatar : styles.personAvatar
+              { backgroundColor: avatarColor }
             ]}>
               <Text style={styles.avatarPlaceholderText}>{avatarLetter}</Text>
             </View>
@@ -220,32 +251,18 @@ const MatchItem = React.memo(({ item, index, userType, onPress, delayOffset = 0 
   );
 });
 
-// Helper function to get avatar letter
-const getAvatarLetter = (name) => {
-  return name ? name.charAt(0).toUpperCase() : '?';
-};
-
 const MatchesScreen = ({ navigation }) => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userType, setUserType] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
   
   // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 60],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp'
-  });
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [Platform.OS === 'ios' ? 120 : 140, Platform.OS === 'ios' ? 90 : 110],
-    extrapolate: 'clamp'
-  });
-  const headerTitleSize = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [32, 24],
     extrapolate: 'clamp'
   });
   const headerPadding = scrollY.interpolate({
@@ -253,6 +270,18 @@ const MatchesScreen = ({ navigation }) => {
     outputRange: [20, 10],
     extrapolate: 'clamp'
   });
+  
+  // Animation for tab indicator
+  const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    // Animate tab indicator
+    Animated.timing(tabIndicatorAnim, {
+      toValue: activeFilter === 'all' ? 0 : activeFilter === 'unread' ? 1 : 2,
+      duration: 200,
+      useNativeDriver: true
+    }).start();
+  }, [activeFilter]);
   
   const fetchMatches = async () => {
     try {
@@ -294,6 +323,43 @@ const MatchesScreen = ({ navigation }) => {
   const navigateToChat = (match) => {
     navigation.navigate('Chat', { match });
   };
+
+  const handleLongPress = (match) => {
+    // Vibrate for feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else {
+      Vibration.vibrate(20);
+    }
+    
+    // Show action sheet
+    Alert.alert(
+      'Chat Options',
+      null,
+      [
+        {
+          text: 'Mark as Read',
+          onPress: () => console.log('Mark as read', match.id)
+        },
+        {
+          text: 'Archive Chat',
+          style: 'destructive',
+          onPress: () => console.log('Archive chat', match.id)
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+  
+  // Filter matches
+  const filteredMatches = matches.filter(match => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'unread') return match.unread_count > 0;
+    return false;
+  });
   
   const renderEmptyState = () => {
     const emptyFade = useRef(new Animated.Value(0)).current;
@@ -313,13 +379,18 @@ const MatchesScreen = ({ navigation }) => {
           { opacity: emptyFade }
         ]}
       >
-        <View style={styles.emptyIconContainer}>
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={styles.emptyIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <MaterialCommunityIcons 
             name="message-text-outline" 
             size={100} 
             color="white" 
           />
-        </View>
+        </LinearGradient>
         <Text style={styles.emptyTitle}>No Matches Yet</Text>
         <Text style={styles.emptyText}>
           Swipe right on {userType === 'job_seeker' ? 'jobs' : 'candidates'} you're interested in to start matching!
@@ -327,18 +398,80 @@ const MatchesScreen = ({ navigation }) => {
         <TouchableOpacity 
           style={styles.emptyActionButton}
           onPress={() => navigation.navigate('Swipe')}
+          activeOpacity={0.7}
         >
-          <Text style={styles.emptyActionButtonText}>Go to Swipe</Text>
-          <Ionicons name="arrow-forward" size={18} color="white" style={{ marginLeft: 6 }} />
+          <LinearGradient
+            colors={[COLORS.primary, COLORS.primaryDark]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
+          <Text style={styles.emptyActionButtonText}>Start Swiping</Text>
+          <Ionicons name="arrow-forward" size={18} color="white" style={{ marginLeft: 8 }} />
         </TouchableOpacity>
       </Animated.View>
     );
   };
   
+  const renderEmptyFilterState = () => {
+    return (
+      <View style={styles.emptyFilterContainer}>
+        <MaterialIcons name="filter-none" size={80} color={COLORS.border} />
+        <Text style={styles.emptyFilterTitle}>No unread messages</Text>
+        <Text style={styles.emptyFilterText}>
+          You've caught up with all your matches. Good job!
+        </Text>
+        <TouchableOpacity 
+          style={styles.switchFilterButton}
+          onPress={() => setActiveFilter('all')}
+        >
+          <Text style={styles.switchFilterButtonText}>View All Messages</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+  
   const renderHeader = () => (
     <View style={styles.listHeader}>
-      <Text style={styles.listHeaderTitle}>Your Matches</Text>
-      <View style={styles.listHeaderDivider} />
+      <View style={styles.filterTabs}>
+        <TouchableOpacity 
+          style={[styles.filterTab, activeFilter === 'all' && styles.activeFilterTab]} 
+          onPress={() => setActiveFilter('all')}
+        >
+          <Text style={[styles.filterTabText, activeFilter === 'all' && styles.activeFilterTabText]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.filterTab, activeFilter === 'unread' && styles.activeFilterTab]} 
+          onPress={() => setActiveFilter('unread')}
+        >
+          <Text style={[styles.filterTabText, activeFilter === 'unread' && styles.activeFilterTabText]}>
+            Unread
+          </Text>
+          {matches.some(m => m.unread_count > 0) && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>
+                {matches.reduce((sum, m) => sum + (m.unread_count > 0 ? 1 : 0), 0)}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        <Animated.View 
+          style={[
+            styles.tabIndicator,
+            {
+              transform: [{
+                translateX: tabIndicatorAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, width / 2 - 10]
+                })
+              }]
+            }
+          ]}
+        />
+      </View>
     </View>
   );
   
@@ -351,28 +484,33 @@ const MatchesScreen = ({ navigation }) => {
         styles.header,
         { 
           height: headerHeight,
-          opacity: headerOpacity
         }
       ]}>
         <LinearGradient
           colors={[COLORS.primary, COLORS.primaryDark]}
           style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
         <Animated.View style={[
           styles.headerContent,
           { paddingBottom: headerPadding }
         ]}>
-          <Animated.Text style={[
-            styles.headerTitle,
-            { fontSize: headerTitleSize }
-          ]}>
-            Matches
-          </Animated.Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Matches</Text>
+            {matches.some(m => m.unread_count > 0) && (
+              <View style={styles.headerBadge}>
+                <Text style={styles.headerBadgeText}>
+                  {matches.reduce((sum, m) => sum + m.unread_count, 0)}
+                </Text>
+              </View>
+            )}
+          </View>
           <TouchableOpacity 
-            style={styles.filterButton}
+            style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
           >
-            <Ionicons name="person" size={22} color="white" />
+            <Ionicons name="person-circle" size={28} color="white" />
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -380,23 +518,30 @@ const MatchesScreen = ({ navigation }) => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading matches...</Text>
+          <Text style={styles.loadingText}>Loading conversations...</Text>
         </View>
       ) : (
         <FlatList
-          data={matches}
+          data={filteredMatches}
           renderItem={({ item, index }) => (
             <MatchItem 
               item={item} 
               index={index} 
               userType={userType}
               onPress={navigateToChat}
+              onLongPress={handleLongPress}
             />
           )}
           keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={matches.length === 0 ? styles.emptyListContent : styles.listContent}
-          ListEmptyComponent={renderEmptyState}
-          ListHeaderComponent={matches.length > 0 ? renderHeader : null}
+          contentContainerStyle={
+            filteredMatches.length === 0 ? 
+              (activeFilter === 'all' ? styles.emptyListContent : styles.emptyFilterListContent) : 
+              styles.listContent
+          }
+          ListEmptyComponent={
+            activeFilter === 'all' ? renderEmptyState() : renderEmptyFilterState()
+          }
+          ListHeaderComponent={filteredMatches.length > 0 ? renderHeader : null}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -404,6 +549,8 @@ const MatchesScreen = ({ navigation }) => {
               colors={[COLORS.primary]}
               tintColor={COLORS.primary}
               progressBackgroundColor="white"
+              title="Pull to refresh"
+              titleColor={COLORS.textSecondary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -430,17 +577,33 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
-    justifyContent: 'flex-end',
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
     padding: 20,
   },
-  headerTitle: {
-    flex: 1,
-    color: 'white',
-    fontWeight: 'bold',
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  filterButton: {
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  headerBadge: {
+    marginLeft: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'white',
+    borderRadius: 12,
+  },
+  headerBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  profileButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -470,20 +633,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.l,
   },
+  emptyFilterListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.l,
+  },
   listHeader: {
     marginBottom: SPACING.m,
   },
-  listHeaderTitle: {
-    fontSize: FONTS.h3,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
+  filterTabs: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: BORDERS.radiusMedium,
+    padding: 6,
+    marginBottom: SPACING.m,
+    position: 'relative',
+    ...SHADOWS.small,
   },
-  listHeaderDivider: {
-    height: 2,
-    width: 60,
+  filterTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  activeFilterTab: {
+    borderRadius: BORDERS.radiusMedium - 2,
+  },
+  filterTabText: {
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  activeFilterTabText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    width: '50%',
+    height: '100%',
+    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    borderRadius: BORDERS.radiusMedium - 2,
+    zIndex: 0,
+  },
+  filterBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     backgroundColor: COLORS.primary,
-    borderRadius: 1,
+    borderRadius: 10,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
   },
   matchItem: {
     flexDirection: 'row',
@@ -514,12 +720,6 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  companyAvatar: {
-    backgroundColor: COLORS.primary,
-  },
-  personAvatar: {
-    backgroundColor: COLORS.secondary,
   },
   avatarPlaceholderText: {
     color: 'white',
@@ -605,7 +805,6 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -626,19 +825,50 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   emptyActionButton: {
-    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDERS.radiusMedium,
     ...SHADOWS.medium,
-    flexDirection: 'row',
-    alignItems: 'center',
+    overflow: 'hidden',
   },
   emptyActionButtonText: {
     color: 'white',
     fontSize: FONTS.body,
     fontWeight: 'bold',
-  }
+  },
+  emptyFilterContainer: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyFilterTitle: {
+    fontSize: FONTS.h3,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: SPACING.m,
+    marginBottom: SPACING.s,
+    textAlign: 'center',
+  },
+  emptyFilterText: {
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.l,
+  },
+  switchFilterButton: {
+    paddingVertical: SPACING.s,
+    paddingHorizontal: SPACING.m,
+    borderRadius: 16,
+    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(25, 118, 210, 0.2)',
+  },
+  switchFilterButtonText: {
+    color: COLORS.primary,
+    fontSize: FONTS.label,
+    fontWeight: '500',
+  },
 });
 
 export default MatchesScreen;

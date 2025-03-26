@@ -101,17 +101,55 @@ const ProfileScreen = ({ navigation }) => {
     outputRange: [0, -70],
     extrapolate: 'clamp'
   });
+  const nameOpacity = scrollY.interpolate({
+    inputRange: [0, 120, 180],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp'
+  });
   
-  // Tab transition animation
-  const tabTranslateX = useRef(new Animated.Value(0)).current;
+  // Tab transition animation - Fixed the issue with tab indicator width
+  const tabIndicatorPosition = useRef(new Animated.Value(0)).current;
+  
+  // Content fade animation
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentTranslateY = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     // Animate tab indicator position
-    Animated.timing(tabTranslateX, {
-      toValue: activeTab === 'about' ? 0 : width / 2,
-      duration: 300,
-      useNativeDriver: true
+    Animated.spring(tabIndicatorPosition, {
+      toValue: activeTab === 'about' ? 0 : 1,
+      friction: 8,
+      tension: 70,
+      useNativeDriver: false // Changed to false since we're animating width
     }).start();
+    
+    // Animate content change
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(contentOpacity, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: true
+        }),
+        Animated.timing(contentTranslateY, {
+          toValue: 20,
+          duration: 120,
+          useNativeDriver: true
+        })
+      ]),
+      Animated.parallel([
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        }),
+        Animated.timing(contentTranslateY, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ])
+    ]).start();
   }, [activeTab]);
   
   useEffect(() => {
@@ -129,7 +167,7 @@ const ProfileScreen = ({ navigation }) => {
             setProfile(SAMPLE_JOBSEEKER_PROFILE);
           }
           setLoading(false);
-        }, 800);
+        }, 600);
       } catch (error) {
         console.error('Error fetching profile:', error);
         setLoading(false);
@@ -180,37 +218,13 @@ const ProfileScreen = ({ navigation }) => {
   };
   
   const AboutTab = ({ profile }) => {
-    // Content fade-in animation
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const translateY = useRef(new Animated.Value(20)).current;
-    
-    useEffect(() => {
-      if (activeTab === 'about') {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true
-          }),
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true
-          })
-        ]).start();
-      } else {
-        fadeAnim.setValue(0);
-        translateY.setValue(20);
-      }
-    }, [activeTab]);
-    
     return (
       <Animated.View 
         style={[
           styles.tabContent,
           {
-            opacity: fadeAnim,
-            transform: [{ translateY }]
+            opacity: contentOpacity,
+            transform: [{ translateY: contentTranslateY }]
           }
         ]}
       >
@@ -223,6 +237,11 @@ const ProfileScreen = ({ navigation }) => {
         </View>
         
         <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="info-outline" size={22} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Account Information</Text>
+          </View>
+          
           <View style={styles.infoRow}>
             <Ionicons name="mail-outline" size={20} color={COLORS.primary} style={styles.infoIcon} />
             <View style={styles.infoTextContainer}>
@@ -255,56 +274,83 @@ const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+        
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="settings" size={22} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Settings</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.settingRow}
+            onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future update.')}
+          >
+            <View style={styles.settingIconContainer}>
+              <Ionicons name="notifications-outline" size={20} color="white" />
+            </View>
+            <Text style={styles.settingText}>Notification Preferences</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.settingRow}
+            onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future update.')}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: '#4CAF50' }]}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="white" />
+            </View>
+            <Text style={styles.settingText}>Privacy Settings</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.settingRow}
+            onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future update.')}
+          >
+            <View style={[styles.settingIconContainer, { backgroundColor: '#FF9800' }]}>
+              <Ionicons name="help-circle-outline" size={20} color="white" />
+            </View>
+            <Text style={styles.settingText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     );
   };
   
   const DetailsTab = ({ profile }) => {
-    // Content fade-in animation
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const translateY = useRef(new Animated.Value(20)).current;
-    
-    useEffect(() => {
-      if (activeTab === 'details') {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true
-          }),
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true
-          })
-        ]).start();
-      } else {
-        fadeAnim.setValue(0);
-        translateY.setValue(20);
-      }
-    }, [activeTab]);
-    
     if (userType === 'recruiter') {
       return (
         <Animated.View 
           style={[
             styles.tabContent,
             {
-              opacity: fadeAnim,
-              transform: [{ translateY }]
+              opacity: contentOpacity,
+              transform: [{ translateY: contentTranslateY }]
             }
           ]}
         >
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="office-building" size={22} color={COLORS.primary} />
-              <Text style={styles.sectionTitle}>Company Details</Text>
+              <Text style={styles.sectionTitle}>Company Profile</Text>
             </View>
             
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Company Name</Text>
-              <Text style={styles.detailValue}>{profile.recruiterprofile.company_name}</Text>
+            <View style={styles.companyHeader}>
+              <View style={styles.companyLogoContainer}>
+                <View style={styles.companyLogo}>
+                  <Text style={styles.companyLogoText}>
+                    {profile.recruiterprofile.company_name.charAt(0)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.companyInfo}>
+                <Text style={styles.companyName}>{profile.recruiterprofile.company_name}</Text>
+                <Text style={styles.companyIndustry}>{profile.recruiterprofile.industry}</Text>
+              </View>
             </View>
+            
+            <View style={styles.divider} />
             
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Your Position</Text>
@@ -312,8 +358,16 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Industry</Text>
-              <Text style={styles.detailValue}>{profile.recruiterprofile.industry}</Text>
+              <Text style={styles.detailLabel}>Company Website</Text>
+              <TouchableOpacity 
+                style={styles.websiteLink}
+                onPress={() => {
+                  Alert.alert('Open Website', 'This would open the website in your browser.');
+                }}
+              >
+                <Text style={styles.websiteLinkText}>{profile.recruiterprofile.company_website}</Text>
+                <Ionicons name="open-outline" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
             </View>
           </View>
           
@@ -327,17 +381,31 @@ const ProfileScreen = ({ navigation }) => {
           
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="web" size={22} color={COLORS.primary} />
-              <Text style={styles.sectionTitle}>Website</Text>
+              <MaterialCommunityIcons name="chart-line" size={22} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Recruiting Activity</Text>
             </View>
+            
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>7</Text>
+                <Text style={styles.statLabel}>Active Jobs</Text>
+              </View>
+              <View style={[styles.statItem, styles.statItemBorder]}>
+                <Text style={styles.statValue}>24</Text>
+                <Text style={styles.statLabel}>Total Matches</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>12</Text>
+                <Text style={styles.statLabel}>Interviews</Text>
+              </View>
+            </View>
+            
             <TouchableOpacity 
-              style={styles.websiteLink}
-              onPress={() => {
-                Alert.alert('Open Website', 'This would open the website in your browser.');
-              }}
+              style={styles.viewStatsButton}
+              onPress={() => Alert.alert('Coming Soon', 'Detailed analytics will be available in a future update.')}
             >
-              <Text style={styles.websiteLinkText}>{profile.recruiterprofile.company_website}</Text>
-              <Ionicons name="open-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.viewStatsButtonText}>View Full Analytics</Text>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -348,15 +416,15 @@ const ProfileScreen = ({ navigation }) => {
           style={[
             styles.tabContent,
             {
-              opacity: fadeAnim,
-              transform: [{ translateY }]
+              opacity: contentOpacity,
+              transform: [{ translateY: contentTranslateY }]
             }
           ]}
         >
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="code-tags" size={22} color={COLORS.primary} />
-              <Text style={styles.sectionTitle}>Skills</Text>
+              <Text style={styles.sectionTitle}>Skills & Expertise</Text>
             </View>
             <View style={styles.skillsContainer}>
               {profile.jobseekerprofile.skills.split(',').map((skill, index) => (
@@ -370,23 +438,36 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="briefcase-clock" size={22} color={COLORS.primary} />
-              <Text style={styles.sectionTitle}>Professional</Text>
+              <Text style={styles.sectionTitle}>Professional Experience</Text>
             </View>
             
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Experience</Text>
-              <Text style={styles.detailValue}>{profile.jobseekerprofile.experience_years} years</Text>
+            <View style={styles.experienceItem}>
+              <View style={styles.experienceDot} />
+              <View style={styles.experienceContent}>
+                <Text style={styles.experienceTitle}>Senior Developer</Text>
+                <Text style={styles.experienceCompany}>Tech Solutions Inc</Text>
+                <Text style={styles.experiencePeriod}>2020 - Present</Text>
+                <Text style={styles.experienceDescription}>
+                  Led development of multiple web applications using React and Node.js.
+                </Text>
+              </View>
             </View>
             
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Desired Position</Text>
-              <Text style={styles.detailValue}>{profile.jobseekerprofile.desired_position}</Text>
+            <View style={styles.experienceItem}>
+              <View style={styles.experienceDot} />
+              <View style={styles.experienceContent}>
+                <Text style={styles.experienceTitle}>Web Developer</Text>
+                <Text style={styles.experienceCompany}>Digital Innovations</Text>
+                <Text style={styles.experiencePeriod}>2018 - 2020</Text>
+                <Text style={styles.experienceDescription}>
+                  Developed responsive websites and maintained client projects.
+                </Text>
+              </View>
             </View>
             
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Expected Salary</Text>
-              <Text style={styles.detailValue}>
-                ${profile.jobseekerprofile.desired_salary?.toLocaleString() || 'Not specified'}
+            <View style={styles.experienceSummary}>
+              <Text style={styles.experienceSummaryText}>
+                <Text style={styles.boldText}>{profile.jobseekerprofile.experience_years}</Text> years of professional experience
               </Text>
             </View>
           </View>
@@ -396,7 +477,61 @@ const ProfileScreen = ({ navigation }) => {
               <MaterialCommunityIcons name="school" size={22} color={COLORS.primary} />
               <Text style={styles.sectionTitle}>Education</Text>
             </View>
-            <Text style={styles.educationText}>{profile.jobseekerprofile.education}</Text>
+            <View style={styles.educationItemContainer}>
+              <View style={styles.educationItem}>
+                <View style={styles.educationIconContainer}>
+                  <MaterialCommunityIcons name="school" size={24} color="white" />
+                </View>
+                <View style={styles.educationContent}>
+                  <Text style={styles.educationDegree}>
+                    {profile.jobseekerprofile.education.split(',')[0] || "BS Computer Science"}
+                  </Text>
+                  <Text style={styles.educationSchool}>
+                    {profile.jobseekerprofile.education.split(',')[1] || "University of New York"}
+                  </Text>
+                  <Text style={styles.educationYear}>2014 - 2018</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="trending-up" size={22} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Job Preferences</Text>
+            </View>
+            
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceIconContainer}>
+                <Ionicons name="briefcase" size={18} color="white" />
+              </View>
+              <View style={styles.preferenceContent}>
+                <Text style={styles.preferenceLabel}>Desired Position</Text>
+                <Text style={styles.preferenceValue}>{profile.jobseekerprofile.desired_position}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIconContainer, {backgroundColor: '#4CAF50'}]}>
+                <FontAwesome5 name="dollar-sign" size={16} color="white" />
+              </View>
+              <View style={styles.preferenceContent}>
+                <Text style={styles.preferenceLabel}>Expected Salary</Text>
+                <Text style={styles.preferenceValue}>
+                  ${profile.jobseekerprofile.desired_salary?.toLocaleString() || 'Not specified'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIconContainer, {backgroundColor: '#FF9800'}]}>
+                <Ionicons name="location" size={18} color="white" />
+              </View>
+              <View style={styles.preferenceContent}>
+                <Text style={styles.preferenceLabel}>Preferred Location</Text>
+                <Text style={styles.preferenceValue}>{profile.location || 'Not specified'}</Text>
+              </View>
+            </View>
           </View>
         </Animated.View>
       );
@@ -406,12 +541,21 @@ const ProfileScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <LinearGradient
+          colors={[COLORS.primaryLight, COLORS.primary]}
+          style={styles.loadingGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <ActivityIndicator size="large" color="white" />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
   }
   
+  // Calculate tab indicator position and width
+  const tabWidth = (width - 40) / 2; // Half of tabBar width (accounting for padding)
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -421,6 +565,8 @@ const ProfileScreen = ({ navigation }) => {
         <LinearGradient
           colors={[COLORS.primaryDark, COLORS.primary]}
           style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
         
         {/* Hidden header title - appears when scrolling */}
@@ -463,15 +609,25 @@ const ProfileScreen = ({ navigation }) => {
             {profile?.profile_picture ? (
               <Image source={{ uri: profile.profile_picture }} style={styles.profileImage} />
             ) : (
-              <View style={styles.profileImagePlaceholder}>
+              <LinearGradient
+                colors={[COLORS.primaryLight, COLORS.primary]}
+                style={styles.profileImagePlaceholder}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
                 <Text style={styles.initials}>
                   {getInitials(profile?.user?.first_name, profile?.user?.last_name)}
                 </Text>
-              </View>
+              </LinearGradient>
             )}
           </Animated.View>
           
-          <View style={styles.profileInfo}>
+          <Animated.View 
+            style={[
+              styles.profileInfo,
+              { opacity: nameOpacity }
+            ]}
+          >
             <Text style={styles.profileName}>
               {profile?.user?.first_name} {profile?.user?.last_name}
             </Text>
@@ -487,7 +643,7 @@ const ProfileScreen = ({ navigation }) => {
               <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.8)" />
               <Text style={styles.locationText}>{profile.location}</Text>
             </View>
-          </View>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
       
@@ -519,11 +675,13 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
         
+        {/* Fixed the tab indicator - now using left property based on activeTab */}
         <Animated.View 
           style={[
             styles.tabIndicator,
             {
-              transform: [{ translateX: tabTranslateX }]
+              width: tabWidth,
+              left: activeTab === 'about' ? 20 : 20 + tabWidth
             }
           ]}
         />
@@ -608,12 +766,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+  },
+  loadingGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
   loadingText: {
     marginTop: 16,
     fontSize: FONTS.body,
-    color: COLORS.textSecondary,
+    color: 'white',
+    fontWeight: '500',
   },
   header: {
     overflow: 'hidden',
@@ -676,7 +837,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
@@ -726,6 +886,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     position: 'relative',
     zIndex: 1,
+    paddingHorizontal: 20,
   },
   tabButton: {
     flex: 1,
@@ -744,10 +905,9 @@ const styles = StyleSheet.create({
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    width: width / 2,
     height: 3,
     backgroundColor: COLORS.primary,
+    borderRadius: 1.5,
   },
   scrollContent: {
     paddingBottom: 30,
@@ -798,6 +958,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
   },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  settingIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  settingText: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  companyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  companyLogoContainer: {
+    marginRight: 16,
+  },
+  companyLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  companyLogoText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  companyInfo: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  companyIndustry: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 16,
+  },
   detailRow: {
     marginBottom: 12,
     paddingBottom: 12,
@@ -819,11 +1039,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: COLORS.text,
   },
-  educationText: {
-    fontSize: 16,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
   websiteLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -833,6 +1048,46 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginRight: 8,
     textDecorationLine: 'underline',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 16,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statItemBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderLeftColor: COLORS.border,
+    borderRightColor: COLORS.border,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  viewStatsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: 8,
+  },
+  viewStatsButtonText: {
+    color: COLORS.primary,
+    fontWeight: '500',
+    marginRight: 4,
   },
   skillsContainer: {
     flexDirection: 'row',
@@ -851,6 +1106,118 @@ const styles = StyleSheet.create({
   skillText: {
     color: COLORS.primary,
     fontSize: 14,
+    fontWeight: '500',
+  },
+  experienceItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  experienceDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    marginTop: 6,
+    marginRight: 10,
+  },
+  experienceContent: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 16,
+  },
+  experienceTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  experienceCompany: {
+    fontSize: 14,
+    color: COLORS.primary,
+    marginVertical: 2,
+  },
+  experiencePeriod: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginBottom: 6,
+  },
+  experienceDescription: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+  experienceSummary: {
+    backgroundColor: 'rgba(25, 118, 210, 0.05)',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  experienceSummaryText: {
+    color: COLORS.text,
+    fontSize: 15,
+  },
+  boldText: {
+    fontWeight: 'bold',
+  },
+  educationItemContainer: {
+    marginVertical: 8,
+  },
+  educationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  educationIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  educationContent: {
+    flex: 1,
+  },
+  educationDegree: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  educationSchool: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginVertical: 2,
+  },
+  educationYear: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  preferenceIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  preferenceContent: {
+    flex: 1,
+  },
+  preferenceLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  preferenceValue: {
+    fontSize: 16,
+    color: COLORS.text,
     fontWeight: '500',
   },
   actionsContainer: {

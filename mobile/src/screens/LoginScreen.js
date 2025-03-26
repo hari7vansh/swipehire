@@ -15,11 +15,12 @@ import {
   Animated,
   Dimensions,
   StatusBar,
-  Keyboard
+  Keyboard,
+  Vibration
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI, API_URL } from '../services/api';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SPACING, BORDERS, SHADOWS } from '../theme';
 import * as Haptics from 'expo-haptics';
@@ -36,9 +37,17 @@ const LoginScreen = ({ navigation }) => {
   
   // Animation values
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(50)).current;
+  const slideUp = useRef(new Animated.Value(40)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoTranslateY = useRef(new Animated.Value(0)).current;
+  
+  // Animation for background shapes
+  const shape1Position = useRef(new Animated.ValueXY({ x: -50, y: -50 })).current;
+  const shape2Position = useRef(new Animated.ValueXY({ x: width, y: 100 })).current;
+  const shape3Position = useRef(new Animated.ValueXY({ x: width/2, y: height/3 })).current;
+  
+  // Refs for TextInput focus
+  const passwordRef = useRef(null);
   
   useEffect(() => {
     // Set up keyboard listeners
@@ -54,7 +63,7 @@ const LoginScreen = ({ navigation }) => {
             useNativeDriver: true,
           }),
           Animated.timing(logoTranslateY, {
-            toValue: -50,
+            toValue: -40,
             duration: 300,
             useNativeDriver: true,
           }),
@@ -89,12 +98,12 @@ const LoginScreen = ({ navigation }) => {
     Animated.parallel([
       Animated.timing(fadeIn, {
         toValue: 1,
-        duration: 1000,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.timing(slideUp, {
         toValue: 0,
-        duration: 1000,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.spring(logoScale, {
@@ -102,14 +111,71 @@ const LoginScreen = ({ navigation }) => {
         friction: 7,
         tension: 40,
         useNativeDriver: true,
+      }),
+      // Animate background shapes
+      Animated.spring(shape1Position, {
+        toValue: { x: -30, y: -30 },
+        friction: 7,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.spring(shape2Position, {
+        toValue: { x: width - 100, y: 120 },
+        friction: 7,
+        tension: 30,
+        useNativeDriver: true,
+      }),
+      Animated.spring(shape3Position, {
+        toValue: { x: width/4, y: height/3 - 50 },
+        friction: 7,
+        tension: 20,
+        useNativeDriver: true,
       })
     ]).start();
+    
+    // Start floating animation for shapes
+    startFloatingAnimation();
     
     return () => {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
   }, []);
+  
+  // Floating animation for background shapes
+  const startFloatingAnimation = () => {
+    const createFloatAnimation = (shapePosition, offsetX, offsetY, duration) => {
+      return Animated.sequence([
+        Animated.timing(shapePosition, {
+          toValue: { 
+            x: shapePosition.x._value + offsetX, 
+            y: shapePosition.y._value + offsetY 
+          },
+          duration: duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shapePosition, {
+          toValue: { 
+            x: shapePosition.x._value, 
+            y: shapePosition.y._value 
+          },
+          duration: duration,
+          useNativeDriver: true,
+        })
+      ]);
+    };
+    
+    // Create infinite floating animation
+    const floatingLoop = () => {
+      Animated.parallel([
+        createFloatAnimation(shape1Position, 10, 15, 3000),
+        createFloatAnimation(shape2Position, -15, 10, 4000),
+        createFloatAnimation(shape3Position, 5, -10, 3500)
+      ]).start(() => floatingLoop());
+    };
+    
+    floatingLoop();
+  };
 
   const validateForm = () => {
     if (!username.trim()) {
@@ -126,7 +192,9 @@ const LoginScreen = ({ navigation }) => {
   const handleLogin = async () => {
     // Haptic feedback
     if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else {
+      Vibration.vibrate(30);
     }
     
     setError('');
@@ -138,7 +206,6 @@ const LoginScreen = ({ navigation }) => {
       console.log('API URL:', API_URL);
       
       const response = await authAPI.login(username, password);
-      console.log('Login response:', response.data);
       
       // Store auth data
       await AsyncStorage.setItem('token', response.data.token);
@@ -186,6 +253,11 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleForgotPassword = () => {
+    // Haptic feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
     // For now just show an alert
     Alert.alert(
       'Reset Password',
@@ -213,8 +285,12 @@ const LoginScreen = ({ navigation }) => {
             { 
               opacity: fadeIn.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 0.6]
-              })
+                outputRange: [0, 0.7]
+              }),
+              transform: [
+                { translateX: shape1Position.x },
+                { translateY: shape1Position.y }
+              ]
             }
           ]} 
         />
@@ -224,8 +300,27 @@ const LoginScreen = ({ navigation }) => {
             { 
               opacity: fadeIn.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 0.5]
-              })
+                outputRange: [0, 0.6]
+              }),
+              transform: [
+                { translateX: shape2Position.x },
+                { translateY: shape2Position.y }
+              ]
+            }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.shape3, 
+            { 
+              opacity: fadeIn.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.4]
+              }),
+              transform: [
+                { translateX: shape3Position.x },
+                { translateY: shape3Position.y }
+              ]
             }
           ]} 
         />
@@ -255,9 +350,14 @@ const LoginScreen = ({ navigation }) => {
               }
             ]}
           >
-            <View style={styles.logoBadge}>
-              <Ionicons name="briefcase" size={50} color="white" />
-            </View>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.8)', 'rgba(255,255,255,0.2)']}
+              style={styles.logoBadge}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <FontAwesome5 name="briefcase" size={50} color={COLORS.primary} />
+            </LinearGradient>
             <Text style={styles.logoText}>SwipeHire</Text>
             <Text style={styles.tagline}>Find your perfect match</Text>
           </Animated.View>
@@ -279,47 +379,59 @@ const LoginScreen = ({ navigation }) => {
               </View>
             ) : null}
             
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor={COLORS.placeholder}
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-              />
+            <Text style={styles.formTitle}>Welcome Back</Text>
+            <Text style={styles.formSubtitle}>Sign in to your account</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Username</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your username"
+                  placeholderTextColor={COLORS.placeholder}
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                />
+              </View>
             </View>
             
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor={COLORS.placeholder}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={secureTextEntry}
-                returnKeyType="go"
-                onSubmitEditing={handleLogin}
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setSecureTextEntry(!secureTextEntry)}
-              >
-                <Ionicons
-                  name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
-                  size={22}
-                  color={COLORS.textSecondary}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={22} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor={COLORS.placeholder}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={secureTextEntry}
+                  returnKeyType="go"
+                  onSubmitEditing={handleLogin}
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setSecureTextEntry(!secureTextEntry)}
+                >
+                  <Ionicons
+                    name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
+                    size={22}
+                    color={COLORS.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
             
             <TouchableOpacity
               style={styles.forgotPasswordButton}
               onPress={handleForgotPassword}
+              activeOpacity={0.7}
             >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
@@ -330,14 +442,21 @@ const LoginScreen = ({ navigation }) => {
               disabled={loading}
               activeOpacity={0.8}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="log-in-outline" size={20} color="white" style={styles.buttonIcon} />
-                  <Text style={styles.loginButtonText}>Log In</Text>
-                </>
-              )}
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryDark]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <View style={styles.loginButtonContent}>
+                    <Ionicons name="log-in-outline" size={20} color="white" style={styles.buttonIcon} />
+                    <Text style={styles.loginButtonText}>Sign In</Text>
+                  </View>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
 
             <View style={styles.registerContainer}>
@@ -358,15 +477,9 @@ const LoginScreen = ({ navigation }) => {
                   <TouchableOpacity 
                     style={styles.debugButton} 
                     onPress={async () => {
-                      try {
-                        setUsername('recruiter');
-                        setPassword('password123');
-                        await AsyncStorage.setItem('token', 'debug-token-recruiter');
-                        await AsyncStorage.setItem('userType', 'recruiter');
-                        await AsyncStorage.setItem('userId', '1');
-                      } catch (error) {
-                        Alert.alert('Debug Error', error.message);
-                      }
+                      setUsername('recruiter');
+                      setPassword('password123');
+                      handleLogin();
                     }}
                   >
                     <Ionicons name="business-outline" size={16} color={COLORS.textSecondary} />
@@ -376,15 +489,9 @@ const LoginScreen = ({ navigation }) => {
                   <TouchableOpacity 
                     style={styles.debugButton} 
                     onPress={async () => {
-                      try {
-                        setUsername('jobseeker');
-                        setPassword('password123');
-                        await AsyncStorage.setItem('token', 'debug-token-jobseeker');
-                        await AsyncStorage.setItem('userType', 'job_seeker');
-                        await AsyncStorage.setItem('userId', '2');
-                      } catch (error) {
-                        Alert.alert('Debug Error', error.message);
-                      }
+                      setUsername('jobseeker');
+                      setPassword('password123');
+                      handleLogin();
                     }}
                   >
                     <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
@@ -417,7 +524,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: height * 0.4,
+    bottom: 0,
     overflow: 'hidden',
   },
   shape1: {
@@ -426,9 +533,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 100,
     backgroundColor: 'white',
-    top: -50,
-    right: -50,
-    opacity: 0.1,
+    transform: [{ scale: 1.2 }],
   },
   shape2: {
     position: 'absolute',
@@ -436,9 +541,15 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 75,
     backgroundColor: 'white',
-    bottom: 20,
-    left: -30,
-    opacity: 0.1,
+    transform: [{ scale: 1.2 }],
+  },
+  shape3: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'white',
+    transform: [{ scale: 1.2 }],
   },
   keyboardView: {
     flex: 1,
@@ -456,19 +567,11 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 100,
     height: 100,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    ...SHADOWS.large,
   },
   logoText: {
     fontSize: 42,
@@ -478,14 +581,25 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: FONTS.body,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   formContainer: {
     backgroundColor: 'white',
     borderRadius: BORDERS.radiusLarge,
     paddingHorizontal: SPACING.l,
-    paddingVertical: SPACING.xl,
+    paddingVertical: SPACING.l,
     ...SHADOWS.large,
+  },
+  formTitle: {
+    fontSize: FONTS.h2,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  formSubtitle: {
+    fontSize: FONTS.body,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.l,
   },
   errorContainer: {
     flexDirection: 'row',
@@ -500,14 +614,24 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.s,
     flex: 1,
   },
+  inputGroup: {
+    marginBottom: SPACING.m,
+  },
+  inputLabel: {
+    fontSize: FONTS.label,
+    fontWeight: '500',
+    color: COLORS.text,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: BORDERS.radiusMedium,
-    marginBottom: SPACING.m,
     backgroundColor: COLORS.background,
+    ...SHADOWS.small,
   },
   inputIcon: {
     padding: SPACING.m,
@@ -528,16 +652,19 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: COLORS.primary,
     fontSize: FONTS.label,
+    fontWeight: '500',
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
     borderRadius: BORDERS.radiusMedium,
-    padding: SPACING.m,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
     height: 56,
     ...SHADOWS.medium,
+    overflow: 'hidden',
+  },
+  loginButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
   buttonIcon: {
     marginRight: SPACING.s,
